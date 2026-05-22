@@ -56,21 +56,17 @@ public class MainActivity extends AppCompatActivity {
         hudView     = findViewById(R.id.hudView);
         btnFlip     = findViewById(R.id.btnFlip);
 
-        strikeDb     = new StrikeDatabase(this);
-        strikeTracker = new StrikeTracker(result -> runOnUiThread(() -> {
-            strikeDb.saveStrike(result);
+        strikeDb = new StrikeDatabase(this);
 
-            StrikeTracker.StrikeResult prevBestLevel = strikeDb.getPersonalBest("level");
-            boolean newPB = prevBestLevel == null || result.powerLevel > prevBestLevel.powerLevel;
-
-            // Re-query after save so PB rows reflect the new record
-            StrikeTracker.StrikeResult pbSpeed = strikeDb.getPersonalBest("speed");
-            StrikeTracker.StrikeResult pbPower = strikeDb.getPersonalBest("power");
-            StrikeTracker.StrikeResult pbLevel = strikeDb.getPersonalBest("level");
-
-            hudView.updateStrike(result, pbSpeed, pbPower, pbLevel,
-                    strikeDb.getTotalStrikes(), strikeDb.getPerfectStrikes(), newPB);
-        }));
+        strikeTracker = new StrikeTracker(strikeDb, (result, isNewPB) ->
+            runOnUiThread(() -> hudView.updateStrike(
+                    result,
+                    strikeDb.getPersonalBest("speed"),
+                    strikeDb.getPersonalBest("power"),
+                    strikeDb.getPersonalBest("level"),
+                    strikeDb.getTotalStrikes(),
+                    strikeDb.getPerfectStrikes(),
+                    isNewPB)));
 
         btnFlip.setOnClickListener(v -> flipCamera());
 
