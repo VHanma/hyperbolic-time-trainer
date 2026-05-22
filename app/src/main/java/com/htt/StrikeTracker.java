@@ -1,30 +1,28 @@
 package com.htt;
 
-import android.graphics.PointF;
-import java.util.ArrayList;
-import java.util.List;
+import com.google.mlkit.vision.pose.Pose;
+import com.google.mlkit.vision.pose.PoseLandmark;
 
 /**
- * Optical-flow strike tracker using frame-delta pixel centroid tracking.
- * Speed  = keypoint displacement / frame_dt (scaled px→m/s via PPM constant)
- * Power  = peak_speed * technique_multiplier
- * Level  = composite power level (0–9000+, DBZ-inspired scale)
+ * Pose-based strike detector.
+ * Tracks wrist velocity relative to shoulder guard, classifies punch type,
+ * scores technique via hip rotation + shoulder alignment + trajectory linearity.
  */
 public class StrikeTracker {
 
-    // Pixels-per-meter calibration at ~60cm arm's length from phone
-    private static final float PPM = 420f;
-    private static final float MOTION_THRESHOLD = 18f;
-    private static final float MIN_STRIKE_SPEED  = 1.2f;  // m/s
-    private static final int   WINDOW            = 8;
+    public interface StrikeListener {
+        void onStrike(StrikeResult result, boolean isPersonalBest);
+    }
 
     public static class StrikeResult {
-        public float speedMs;
-        public float powerScore;     // 0–100
-        public float techniqueScore; // 0–100
-        public float powerLevel;     // 0–9000+ (composite DBZ scale)
+        public float speedMs;           // peak wrist speed m/s
+        public float powerScore;        // 0–100
+        public float techniqueScore;    // 0–100
+        public float powerLevel;        // 0–9000+
+        public String punchType;        // JAB / CROSS / HOOK / UPPERCUT
+        public String techniqueNote;    // coaching cue
         public long  timestampMs;
-        public boolean isPerfect;    // tech>=85 && speed>=7
+        public boolean isPerfect;       // tech>=85 && speed>=6
 
         public String levelLabel() {
             if (powerLevel >= 9000) return "OVER 9000!!!";
@@ -35,27 +33,34 @@ public class StrikeTracker {
         }
     }
 
-    private final PointF[] centroids  = new PointF[WINDOW];
-    private final long[]   timestamps = new long[WINDOW];
-    private int head = 0, count = 0;
+    // Pixels-per-meter at ~60cm arm's length (calibrated to 640px wide frame)
+    private static final float PPM = 420f;
+    private static final float STRIKE_THRESHOLD_MS = 1.8f; // min m/s to count
 
-    private StrikeResult lastStrike;
-    private StrikeResult pbSpeed;
-    private StrikeResult pbPower;
-    private StrikeResult pbLevel;
-    private int totalStrikes = 0;
+    // Strike phase state machine
+    private static final int IDLE    = 0;
+    private static final int LOADING = 1;
+    private static final int FIRING  = 2;
+
+    private int phase = IDLE;
+    private float peakSpeed = 0;
+    private float peakTech  = 0;
+    private String punchType = "JAB";
+
+    // Previous frame landmarks
+    private float prevRWristX, prevRWristY;
+    private float prevLWristX, prevLWristY;
+    private long  prevTimeMs = 0;
+
+    // Personal bests (in-memory, loaded from DB at init)
+    private StrikeResult pbSpeed, pbPower, pbLevel;
 
     private final StrikeDatabase db;
     private final StrikeListener listener;
 
-    public interface StrikeListener {
-        void onStrike(StrikeResult result, boolean isPersonalBest);
-    }
-
     public StrikeTracker(StrikeDatabase db, StrikeListener listener) {
         this.db = db;
         this.listener = listener;
-        for (int i = 0; i < WINDOW; i++) centroids[i] = new PointF(0, 0);
         if (db != null) {
             pbSpeed = db.getPersonalBest("speed");
             pbPower = db.getPersonalBest("power");
@@ -63,58 +68,75 @@ public class StrikeTracker {
         }
     }
 
-    public StrikeResult processFrame(int[] prev, int[] curr, int w, int h) {
-        if (prev == null || curr == null) return null;
-        PointF c = motionCentroid(prev, curr, w, h);
+    public void processPose(Pose pose) {
+        if (pose == null) return;
         long now = System.currentTimeMillis();
-        centroids[head] = c;
-        timestamps[head] = now;
-        head = (head + 1) % WINDOW;
-        if (count < WINDOW) count++;
-        return detect();
-    }
+        if (prevTimeMs == 0) { prevTimeMs = now; cacheWrists(pose); return; }
 
-    private PointF motionCentroid(int[] prev, int[] curr, int w, int h) {
-        float sx = 0, sy = 0, sw = 0;
-        for (int y = 4; y < h - 4; y += 4) {
-            for (int x = 4; x < w - 4; x += 4) {
-                int i = y * w + x;
-                float d = pixelDiff(prev[i], curr[i]);
-                if (d > MOTION_THRESHOLD) { sx += x * d; sy += y * d; sw += d; }
-            }
-        }
-        return sw < 1f ? new PointF(0, 0) : new PointF(sx / sw, sy / sw);
-    }
+        float dt = (now - prevTimeMs) / 1000f;
+        if (dt < 0.01f) return;
+        prevTimeMs = now;
 
-    private float pixelDiff(int a, int b) {
-        return (Math.abs(((a>>16)&0xFF) - ((b>>16)&0xFF)) +
-                Math.abs(((a>>8)&0xFF)  - ((b>>8)&0xFF))  +
-                Math.abs((a&0xFF)       - (b&0xFF))) / 3f;
-    }
+        PoseLandmark rWrist  = pose.getPoseLandmark(PoseLandmark.RIGHT_WRIST);
+        PoseLandmark lWrist  = pose.getPoseLandmark(PoseLandmark.LEFT_WRIST);
+        PoseLandmark rShoulder = pose.getPoseLandmark(PoseLandmark.RIGHT_SHOULDER);
+        PoseLandmark lShoulder = pose.getPoseLandmark(PoseLandmark.LEFT_SHOULDER);
+        PoseLandmark rHip    = pose.getPoseLandmark(PoseLandmark.RIGHT_HIP);
+        PoseLandmark lHip    = pose.getPoseLandmark(PoseLandmark.LEFT_HIP);
+        PoseLandmark rElbow  = pose.getPoseLandmark(PoseLandmark.RIGHT_ELBOW);
+        PoseLandmark lElbow  = pose.getPoseLandmark(PoseLandmark.LEFT_ELBOW);
 
-    private StrikeResult detect() {
-        if (count < 3) return null;
-        List<PointF> pts = new ArrayList<>();
-        List<Long> times = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
-            int idx = ((head - 1 - i) + WINDOW) % WINDOW;
-            PointF p = centroids[idx];
-            if (p.x != 0 || p.y != 0) { pts.add(0, p); times.add(0, timestamps[idx]); }
-        }
-        if (pts.size() < 2) return null;
-
-        float peakPx = 0;
-        for (int i = 1; i < pts.size(); i++) {
-            float d = dist(pts.get(i-1), pts.get(i));
-            long dt = times.get(i) - times.get(i-1);
-            if (dt > 0) peakPx = Math.max(peakPx, d / dt * 1000f);
+        if (rWrist == null || lWrist == null || rShoulder == null || lShoulder == null) {
+            cacheWrists(pose); return;
         }
 
-        float speed = peakPx / PPM;
-        if (speed < MIN_STRIKE_SPEED) return null;
+        // Wrist speeds (px/s → m/s)
+        float rDx = (rWrist.getPosition().x - prevRWristX) / dt;
+        float rDy = (rWrist.getPosition().y - prevRWristY) / dt;
+        float lDx = (lWrist.getPosition().x - prevLWristX) / dt;
+        float lDy = (lWrist.getPosition().y - prevLWristY) / dt;
+        float rSpeed = (float) Math.sqrt(rDx*rDx + rDy*rDy) / PPM;
+        float lSpeed = (float) Math.sqrt(lDx*lDx + lDy*lDy) / PPM;
 
-        float tech  = technique(pts);
-        float power = Math.min(100f, (speed / 15f) * 100f * (tech / 100f));
+        float speed = Math.max(rSpeed, lSpeed);
+        boolean rightHand = rSpeed >= lSpeed;
+
+        switch (phase) {
+            case IDLE:
+                if (speed > STRIKE_THRESHOLD_MS) {
+                    phase = FIRING;
+                    peakSpeed = speed;
+                    punchType = classifyPunch(
+                            rightHand ? rDx : lDx,
+                            rightHand ? rDy : lDy,
+                            rightHand, rShoulder, lShoulder, rElbow, lElbow);
+                    peakTech = scoreTechnique(pose, rightHand, rDx, rDy, lDx, lDy);
+                }
+                break;
+
+            case FIRING:
+                if (speed > peakSpeed) {
+                    peakSpeed = speed;
+                    punchType = classifyPunch(
+                            rightHand ? rDx : lDx,
+                            rightHand ? rDy : lDy,
+                            rightHand, rShoulder, lShoulder, rElbow, lElbow);
+                    peakTech = scoreTechnique(pose, rightHand, rDx, rDy, lDx, lDy);
+                } else if (speed < STRIKE_THRESHOLD_MS * 0.5f) {
+                    // Deceleration — strike complete
+                    emitStrike(peakSpeed, peakTech, punchType, pose, rHip, lHip);
+                    phase = IDLE;
+                    peakSpeed = 0;
+                }
+                break;
+        }
+
+        cacheWrists(pose);
+    }
+
+    private void emitStrike(float speed, float tech, String punch,
+                            Pose pose, PoseLandmark rHip, PoseLandmark lHip) {
+        float power = computePower(speed, tech, rHip, lHip);
         float level = computePowerLevel(speed, power, tech);
 
         StrikeResult r = new StrikeResult();
@@ -122,58 +144,122 @@ public class StrikeTracker {
         r.powerScore     = power;
         r.techniqueScore = tech;
         r.powerLevel     = level;
+        r.punchType      = punch;
+        r.techniqueNote  = techniqueNote(tech, speed, punch);
         r.timestampMs    = System.currentTimeMillis();
-        r.isPerfect      = tech >= 85f && speed >= 7f;
-
-        lastStrike = r;
-        totalStrikes++;
+        r.isPerfect      = tech >= 85f && speed >= 6f;
 
         boolean isPB = false;
-        if (pbSpeed == null || speed > pbSpeed.speedMs) { pbSpeed = r; isPB = true; }
+        if (pbSpeed == null || speed > pbSpeed.speedMs)   { pbSpeed = r; isPB = true; }
         if (pbPower == null || power > pbPower.powerScore) { pbPower = r; isPB = true; }
         if (pbLevel == null || level > pbLevel.powerLevel) { pbLevel = r; isPB = true; }
 
         if (db != null) db.saveStrike(r);
         if (listener != null) listener.onStrike(r, isPB);
-        count = 0;
-        return r;
     }
 
-    /**
-     * Power level: 0–9000+ composite scale.
-     * Speed contributes 50%, power 30%, technique 20%.
-     * Max theoretical: elite boxer ~12m/s = ~8500+.
-     */
-    private float computePowerLevel(float speed, float power, float tech) {
-        float speedContrib = (speed / 15f) * 4500f;
-        float powerContrib = (power / 100f) * 2700f;
-        float techContrib  = (tech  / 100f) * 1800f;
-        return speedContrib + powerContrib + techContrib;
-    }
+    // ── Punch classification ──────────────────────────────────────────────────
 
-    private float technique(List<PointF> pts) {
-        if (pts.size() < 2) return 50f;
-        PointF s = pts.get(0), e = pts.get(pts.size()-1);
-        float direct = dist(s, e), path = 0;
-        for (int i = 1; i < pts.size(); i++) path += dist(pts.get(i-1), pts.get(i));
-        if (path < 1f) return 50f;
-        float straight = direct / path;
-        float accel = 0;
-        if (pts.size() >= 4) {
-            if (dist(pts.get(pts.size()-2), pts.get(pts.size()-1)) >
-                dist(pts.get(0), pts.get(1))) accel = 15f;
+    private String classifyPunch(float dx, float dy,
+                                  boolean rightHand,
+                                  PoseLandmark rShoulder, PoseLandmark lShoulder,
+                                  PoseLandmark rElbow, PoseLandmark lElbow) {
+        // dy positive = moving down in image coords (uppercut feels upward on body)
+        float absDx = Math.abs(dx);
+        float absDy = Math.abs(dy);
+
+        // Uppercut: wrist moving upward (negative dy in image) faster than horizontal
+        if (dy < 0 && absDy > absDx * 0.8f) return "UPPERCUT";
+
+        // Hook: significant lateral component AND elbow bent outward
+        if (rElbow != null && lElbow != null) {
+            float elbowLateral = rightHand
+                    ? Math.abs(rElbow.getPosition().x - rShoulder.getPosition().x)
+                    : Math.abs(lElbow.getPosition().x - lShoulder.getPosition().x);
+            if (absDy < absDx * 0.6f && elbowLateral > 40f) return "HOOK";
         }
-        return Math.min(100f, straight * 85f + accel);
+
+        // Jab (lead hand) vs Cross (rear hand) — right-handed stance: jab=left, cross=right
+        return rightHand ? "CROSS" : "JAB";
     }
 
-    private float dist(PointF a, PointF b) {
-        float dx = a.x-b.x, dy = a.y-b.y;
-        return (float) Math.sqrt(dx*dx + dy*dy);
+    // ── Technique scoring ─────────────────────────────────────────────────────
+
+    private float scoreTechnique(Pose pose, boolean rightHand,
+                                  float rDx, float rDy, float lDx, float lDy) {
+        float score = 50f; // baseline
+
+        PoseLandmark rShoulder = pose.getPoseLandmark(PoseLandmark.RIGHT_SHOULDER);
+        PoseLandmark lShoulder = pose.getPoseLandmark(PoseLandmark.LEFT_SHOULDER);
+        PoseLandmark rHip      = pose.getPoseLandmark(PoseLandmark.RIGHT_HIP);
+        PoseLandmark lHip      = pose.getPoseLandmark(PoseLandmark.LEFT_HIP);
+        PoseLandmark rElbow    = pose.getPoseLandmark(PoseLandmark.RIGHT_ELBOW);
+        PoseLandmark lElbow    = pose.getPoseLandmark(PoseLandmark.LEFT_ELBOW);
+
+        if (rShoulder == null || lShoulder == null) return score;
+
+        // 1. Shoulder rotation: punching shoulder should rotate forward (+15 pts)
+        float shoulderAngle = Math.abs(
+                rShoulder.getPosition().z - lShoulder.getPosition().z);
+        score += Math.min(15f, shoulderAngle * 0.5f);
+
+        // 2. Hip rotation present (+15 pts)
+        if (rHip != null && lHip != null) {
+            float hipAngle = Math.abs(rHip.getPosition().z - lHip.getPosition().z);
+            score += Math.min(15f, hipAngle * 0.5f);
+        }
+
+        // 3. Arm extension — elbow below shoulder level on contact (+10 pts)
+        PoseLandmark elbow = rightHand ? rElbow : lElbow;
+        PoseLandmark shoulder = rightHand ? rShoulder : lShoulder;
+        if (elbow != null && shoulder != null) {
+            float extRatio = elbow.getPosition().y / (shoulder.getPosition().y + 1f);
+            if (extRatio > 0.85f) score += 10f;
+        }
+
+        // 4. Guard hand stays up — non-punching wrist near its shoulder (+10 pts)
+        PoseLandmark guardWrist  = rightHand
+                ? pose.getPoseLandmark(PoseLandmark.LEFT_WRIST)
+                : pose.getPoseLandmark(PoseLandmark.RIGHT_WRIST);
+        PoseLandmark guardShoulder = rightHand ? lShoulder : rShoulder;
+        if (guardWrist != null) {
+            float guardDrop = guardWrist.getPosition().y - guardShoulder.getPosition().y;
+            if (guardDrop < 60f) score += 10f;
+        }
+
+        return Math.min(100f, score);
     }
 
-    public StrikeResult getLastStrike()     { return lastStrike; }
-    public StrikeResult getPbSpeed()        { return pbSpeed; }
-    public StrikeResult getPbPower()        { return pbPower; }
-    public StrikeResult getPbLevel()        { return pbLevel; }
-    public int getTotalStrikes()            { return totalStrikes; }
+    // ── Power & level ─────────────────────────────────────────────────────────
+
+    private float computePower(float speed, float tech,
+                               PoseLandmark rHip, PoseLandmark lHip) {
+        float hipBonus = 1f;
+        if (rHip != null && lHip != null) {
+            float hipRot = Math.abs(rHip.getPosition().z - lHip.getPosition().z);
+            hipBonus = 1f + Math.min(0.3f, hipRot * 0.01f);
+        }
+        return Math.min(100f, (speed / 15f) * 100f * (tech / 100f) * hipBonus);
+    }
+
+    private float computePowerLevel(float speed, float power, float tech) {
+        return (speed / 15f) * 4500f + (power / 100f) * 2700f + (tech / 100f) * 1800f;
+    }
+
+    // ── Coaching note ─────────────────────────────────────────────────────────
+
+    private String techniqueNote(float tech, float speed, String punch) {
+        if (tech >= 85f) return "PERFECT " + punch + "!";
+        if (tech >= 65f && speed < 4f) return "More hip drive";
+        if (tech >= 65f) return "Good form";
+        if (tech < 45f) return "Rotate hips + guard up";
+        return "Extend fully on " + punch.toLowerCase();
+    }
+
+    private void cacheWrists(Pose pose) {
+        PoseLandmark rW = pose.getPoseLandmark(PoseLandmark.RIGHT_WRIST);
+        PoseLandmark lW = pose.getPoseLandmark(PoseLandmark.LEFT_WRIST);
+        if (rW != null) { prevRWristX = rW.getPosition().x; prevRWristY = rW.getPosition().y; }
+        if (lW != null) { prevLWristX = lW.getPosition().x; prevLWristY = lW.getPosition().y; }
+    }
 }

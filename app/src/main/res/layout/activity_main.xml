@@ -4,19 +4,16 @@
     android:layout_height="match_parent"
     android:background="#000000">
 
-    <!-- Camera preview -->
-    <TextureView
-        android:id="@+id/textureView"
+    <androidx.camera.view.PreviewView
+        android:id="@+id/previewView"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- HUD overlay (full screen, drawn on top of camera) -->
     <com.htt.HudView
         android:id="@+id/hudView"
         android:layout_width="match_parent"
         android:layout_height="match_parent" />
 
-    <!-- Flip camera button — bottom right -->
     <Button
         android:id="@+id/btnFlip"
         android:layout_width="wrap_content"
