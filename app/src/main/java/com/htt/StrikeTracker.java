@@ -200,12 +200,12 @@ public class StrikeTracker {
 
         // 1. Shoulder rotation: punching shoulder should rotate forward (+15 pts)
         float shoulderAngle = Math.abs(
-                rShoulder.getPosition().z - lShoulder.getPosition().z);
+                rShoulder.getPosition3D().getZ() - lShoulder.getPosition3D().getZ());
         score += Math.min(15f, shoulderAngle * 0.5f);
 
         // 2. Hip rotation present (+15 pts)
         if (rHip != null && lHip != null) {
-            float hipAngle = Math.abs(rHip.getPosition().z - lHip.getPosition().z);
+            float hipAngle = Math.abs(rHip.getPosition3D().getZ() - lHip.getPosition3D().getZ());
             score += Math.min(15f, hipAngle * 0.5f);
         }
 
@@ -236,7 +236,7 @@ public class StrikeTracker {
                                PoseLandmark rHip, PoseLandmark lHip) {
         float hipBonus = 1f;
         if (rHip != null && lHip != null) {
-            float hipRot = Math.abs(rHip.getPosition().z - lHip.getPosition().z);
+            float hipRot = Math.abs(rHip.getPosition3D().getZ() - lHip.getPosition3D().getZ());
             hipBonus = 1f + Math.min(0.3f, hipRot * 0.01f);
         }
         return Math.min(100f, (speed / 15f) * 100f * (tech / 100f) * hipBonus);
