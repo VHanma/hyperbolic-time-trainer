@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#000000">
+
+    <!-- Camera preview -->
+    <TextureView
+        android:id="@+id/textureView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- HUD overlay (full screen, drawn on top of camera) -->
+    <com.htt.HudView
+        android:id="@+id/hudView"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent" />
+
+    <!-- Flip camera button — bottom right -->
+    <Button
+        android:id="@+id/btnFlip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="16dp"
+        android:text="⟳ FLIP"
+        android:textColor="#FFFFFF"
+        android:backgroundTint="#AA000000"
+        android:textSize="14sp"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="8dp" />
+
+</FrameLayout>
