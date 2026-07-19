@@ -1,0 +1,105 @@
+name: Build Iron Mind V4 Final APK
+
+on:
+  push:
+    branches: [ master, v4-hyperbolic-chamber ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-final:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Materialize verified V4 source and signing identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .ironmind_payload/new/p* > /tmp/ironmind_payload.b64
+          test "$(wc -c < /tmp/ironmind_payload.b64)" -eq 69948
+          echo "b57161e8e1db8577168824f82af6738688244ed204b555e2a93982061fbd08df  /tmp/ironmind_payload.b64" | sha256sum -c -
+          base64 --decode /tmp/ironmind_payload.b64 > /tmp/ironmind_v4_project.tar.gz
+          echo "a59ad0e4f032b0d76e0ec871326f4a3e50d7e037845c54bfac15400f6a0e3036  /tmp/ironmind_v4_project.tar.gz" | sha256sum -c -
+          tar -tzf /tmp/ironmind_v4_project.tar.gz > /dev/null
+          tar -xzf /tmp/ironmind_v4_project.tar.gz -C "$GITHUB_WORKSPACE"
+          cp .ironmind_patch/app-build-v2.gradle app/build.gradle
+          cp .ironmind_patch/SpeechEngine.java app/src/main/java/com/htt/SpeechEngine.java
+          base64 --decode .ironmind_patch/ironmind-v4.keystore.b64 > ironmind-v4.keystore
+          echo "cb499cba21b5aa129b7bdb66f0536be60efe39b401410c2c1146cec6e1fe5374  ironmind-v4.keystore" | sha256sum -c -
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.2 wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          /tmp/gradle-dist/gradle-8.2/bin/gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+
+      - name: Build release APK
+        shell: bash
+        run: |
+          set +e
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/gradle-build.log
+          status=${PIPESTATUS[0]}
+          grep -nE "(^| )error:|FAILURE:|What went wrong:|Execution failed|Could not resolve|Caused by:" /tmp/gradle-build.log | tail -160 > /tmp/concise-build-errors.txt || true
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+
+      - name: Upload compiler diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ironmind-v4-final-build-log
+          path: |
+            /tmp/gradle-build.log
+            /tmp/concise-build-errors.txt
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Verify and package deliverables
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk dist/IronMind-Hyperbolic-Chamber-v4.apk
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs dist/IronMind-Hyperbolic-Chamber-v4.apk | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BUILD_TOOLS/aapt" dump badging dist/IronMind-Hyperbolic-Chamber-v4.apk | tee dist/APK-BADGING-REPORT.txt
+          sha256sum dist/IronMind-Hyperbolic-Chamber-v4.apk > dist/IronMind-Hyperbolic-Chamber-v4-SHA256.txt
+          cat > dist/BUILD-REPORT.txt <<'REPORT'
+          IRON MIND V4: HYPERBOLIC FIGHT CHAMBER
+          Package: com.vhanma.ironmindv4
+          Version: 4.0-Hyperbolic (code 4)
+          Minimum Android: 6.0 / API 23
+          Target Android: API 34
+          Build type: release, stable personal signing identity
+          Network permission: none
+          Core modes: Passive Chamber, Nemesis Combo Coach, Live Vision Analysis, Fusion Chamber, Calibration, Research Report
+          Camera output: estimated speed, modeled force range, mechanics, guard return, balance, and confidence
+          Important: force is a camera-based model, not a direct load-cell measurement. Torch pulse timing varies by phone hardware.
+          REPORT
+          zip -qr dist/IronMind-Hyperbolic-Chamber-v4-Source.zip app build.gradle settings.gradle README.md .github .ironmind_patch
+
+      - name: Upload final APK and source
+        uses: actions/upload-artifact@v4
+        with:
+          name: ironmind-hyperbolic-v4-final
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
