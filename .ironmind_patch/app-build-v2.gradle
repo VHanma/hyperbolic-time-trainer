@@ -19,8 +19,8 @@ android {
         applicationId "com.vhanma.ironmindv4"
         minSdk 23
         targetSdk 34
-        versionCode 4
-        versionName "4.0-Hyperbolic"
+        versionCode 5
+        versionName "4.1-Repeat5"
     }
 
     buildTypes {
