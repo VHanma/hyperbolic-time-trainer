@@ -47,7 +47,18 @@ jobs:
           chmod +x gradlew
 
       - name: Build release APK
-        run: ./gradlew --no-daemon clean assembleRelease
+        shell: bash
+        run: |
+          set +e
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/gradle-build.log
+          status=${PIPESTATUS[0]}
+          if [ "$status" -ne 0 ]; then
+            echo "===== CONCISE BUILD FAILURE ====="
+            grep -nE "(^| )error:|FAILURE:|What went wrong:|Execution failed|Could not resolve|Caused by:" /tmp/gradle-build.log | tail -120 || true
+            echo "===== FINAL 120 LINES ====="
+            tail -120 /tmp/gradle-build.log
+            exit "$status"
+          fi
 
       - name: Package deliverables
         shell: bash
