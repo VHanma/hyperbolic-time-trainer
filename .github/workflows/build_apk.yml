@@ -1,43 +1,67 @@
-name: Build APK
+name: Build Iron Mind V4 APK
 
 on:
   push:
+    branches: [ master, v4-hyperbolic-chamber ]
+  pull_request:
     branches: [ master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   build:
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Materialize verified V4 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .ironmind_payload/new/p* > /tmp/ironmind_payload.b64
+          test "$(wc -c < /tmp/ironmind_payload.b64)" -eq 69948
+          echo "b57161e8e1db8577168824f82af6738688244ed204b555e2a93982061fbd08df  /tmp/ironmind_payload.b64" | sha256sum -c -
+          base64 --decode /tmp/ironmind_payload.b64 > /tmp/ironmind_v4_project.tar.gz
+          echo "a59ad0e4f032b0d76e0ec871326f4a3e50d7e037845c54bfac15400f6a0e3036  /tmp/ironmind_v4_project.tar.gz" | sha256sum -c -
+          tar -tzf /tmp/ironmind_v4_project.tar.gz > /dev/null
+          tar -xzf /tmp/ironmind_v4_project.tar.gz -C "$GITHUB_WORKSPACE"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
+          distribution: temurin
           java-version: '17'
-          distribution: 'temurin'
 
-      - name: Setup Gradle wrapper
+      - name: Set up Gradle 8.2 wrapper
+        shell: bash
         run: |
-          mkdir -p gradle/wrapper
-          cat > gradle/wrapper/gradle-wrapper.properties << 'EOF'
-          distributionBase=GRADLE_USER_HOME
-          distributionPath=wrapper/dists
-          distributionUrl=https\://services.gradle.org/distributions/gradle-8.2-bin.zip
-          zipStoreBase=GRADLE_USER_HOME
-          zipStorePath=wrapper/dists
-          EOF
-          curl -sL https://services.gradle.org/distributions/gradle-8.2-bin.zip -o /tmp/gradle.zip
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
           unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
-          GRADLE_BIN=/tmp/gradle-dist/gradle-8.2/bin/gradle
-          chmod +x $GRADLE_BIN
-          $GRADLE_BIN wrapper --gradle-version 8.2
-          chmod +x ./gradlew
+          /tmp/gradle-dist/gradle-8.2/bin/gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
 
-      - name: Build Release APK
-        run: ./gradlew assembleRelease
+      - name: Build release APK
+        run: ./gradlew --no-daemon clean assembleRelease
 
-      - name: Upload APK
+      - name: Package deliverables
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk dist/IronMind-Hyperbolic-Chamber-v4.apk
+          sha256sum dist/IronMind-Hyperbolic-Chamber-v4.apk > dist/IronMind-Hyperbolic-Chamber-v4-SHA256.txt
+          zip -qr dist/IronMind-Hyperbolic-Chamber-v4-Source.zip app build.gradle settings.gradle README.md .github
+
+      - name: Upload APK and source
         uses: actions/upload-artifact@v4
         with:
-          name: htt-apk
-          path: app/build/outputs/apk/release/*.apk
+          name: ironmind-hyperbolic-v4
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
