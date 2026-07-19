@@ -1,4 +1,4 @@
-name: Build Iron Mind V4 Final APK
+name: Build Iron Mind V4.1 Repeat5 APK
 
 on:
   push:
@@ -32,6 +32,9 @@ jobs:
           tar -xzf /tmp/ironmind_v4_project.tar.gz -C "$GITHUB_WORKSPACE"
           cp .ironmind_patch/app-build-v2.gradle app/build.gradle
           cp .ironmind_patch/SpeechEngine.java app/src/main/java/com/htt/SpeechEngine.java
+          python .ironmind_patch/apply-repeat5.py
+          grep -q 'COMBO_REPETITIONS = 5' app/src/main/java/com/htt/MainActivity.java
+          grep -q 'Repeat " + comboRepeatIndex + " of " + COMBO_REPETITIONS' app/src/main/java/com/htt/MainActivity.java
           base64 --decode .ironmind_patch/ironmind-v4.keystore.b64 > ironmind-v4.keystore
           echo "cb499cba21b5aa129b7bdb66f0536be60efe39b401410c2c1146cec6e1fe5374  ironmind-v4.keystore" | sha256sum -c -
 
@@ -65,7 +68,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ironmind-v4-final-build-log
+          name: ironmind-v4-repeat5-build-log
           path: |
             /tmp/gradle-build.log
             /tmp/concise-build-errors.txt
@@ -77,29 +80,33 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk dist/IronMind-Hyperbolic-Chamber-v4.apk
+          cp app/build/outputs/apk/release/app-release.apk dist/IronMind-Hyperbolic-Chamber-v4.1-Repeat5.apk
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
-          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs dist/IronMind-Hyperbolic-Chamber-v4.apk | tee dist/APK-SIGNATURE-REPORT.txt
-          "$BUILD_TOOLS/aapt" dump badging dist/IronMind-Hyperbolic-Chamber-v4.apk | tee dist/APK-BADGING-REPORT.txt
-          sha256sum dist/IronMind-Hyperbolic-Chamber-v4.apk > dist/IronMind-Hyperbolic-Chamber-v4-SHA256.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs dist/IronMind-Hyperbolic-Chamber-v4.1-Repeat5.apk | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BUILD_TOOLS/aapt" dump badging dist/IronMind-Hyperbolic-Chamber-v4.1-Repeat5.apk | tee dist/APK-BADGING-REPORT.txt
+          sha256sum dist/IronMind-Hyperbolic-Chamber-v4.1-Repeat5.apk > dist/IronMind-Hyperbolic-Chamber-v4.1-Repeat5-SHA256.txt
           cat > dist/BUILD-REPORT.txt <<'REPORT'
-          IRON MIND V4: HYPERBOLIC FIGHT CHAMBER
+          IRON MIND V4.1: HYPERBOLIC FIGHT CHAMBER REPEAT5
           Package: com.vhanma.ironmindv4
-          Version: 4.0-Hyperbolic (code 4)
+          Version: 4.1-Repeat5 (code 5)
           Minimum Android: 6.0 / API 23
           Target Android: API 34
           Build type: release, stable personal signing identity
           Network permission: none
+          Combo behavior: every selected combo is called five consecutive times before advancing
+          Repeat display: REP 1/5 through REP 5/5
+          Quiet matched affirmations: played beneath every repetition when enabled
+          Fusion counting: each repetition can be completed only once
           Core modes: Passive Chamber, Nemesis Combo Coach, Live Vision Analysis, Fusion Chamber, Calibration, Research Report
           Camera output: estimated speed, modeled force range, mechanics, guard return, balance, and confidence
           Important: force is a camera-based model, not a direct load-cell measurement. Torch pulse timing varies by phone hardware.
           REPORT
-          zip -qr dist/IronMind-Hyperbolic-Chamber-v4-Source.zip app build.gradle settings.gradle README.md .github .ironmind_patch
+          zip -qr dist/IronMind-Hyperbolic-Chamber-v4.1-Repeat5-Source.zip app build.gradle settings.gradle README.md .github .ironmind_patch
 
       - name: Upload final APK and source
         uses: actions/upload-artifact@v4
         with:
-          name: ironmind-hyperbolic-v4-final
+          name: ironmind-hyperbolic-v4-repeat5-final
           path: dist/*
           if-no-files-found: error
           retention-days: 30
