@@ -32,6 +32,7 @@ jobs:
           cat .ironmind_patch/v43/DeepEmbedView.part* > app/src/main/java/com/htt/DeepEmbedView.java
           cat .ironmind_patch/v43/SpeechEngine.part* > app/src/main/java/com/htt/SpeechEngine.java
           cp .ironmind_patch/v43/app-build.gradle app/build.gradle
+          cp .ironmind_patch/v43/AndroidManifest.xml app/src/main/AndroidManifest.xml
           cp .ironmind_patch/StrikeTracker-LiveForge.java app/src/main/java/com/htt/StrikeTracker.java
           cp .ironmind_patch/HudView-LiveForge.java app/src/main/java/com/htt/HudView.java
           grep -q 'PASSIVE DEEP FORGE' app/src/main/java/com/htt/MainActivity.java
@@ -85,6 +86,10 @@ jobs:
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs dist/IronMind-Hyperbolic-Chamber-v4.3-DeepPassive-AdjustableRepeats.apk | tee dist/APK-SIGNATURE-REPORT.txt
           "$BUILD_TOOLS/aapt" dump badging dist/IronMind-Hyperbolic-Chamber-v4.3-DeepPassive-AdjustableRepeats.apk | tee dist/APK-BADGING-REPORT.txt
+          if grep -Eq "android.permission.(INTERNET|ACCESS_NETWORK_STATE|WAKE_LOCK|RECEIVE_BOOT_COMPLETED|FOREGROUND_SERVICE)'" dist/APK-BADGING-REPORT.txt; then
+            echo "Unexpected network/background permission found in final APK"
+            exit 1
+          fi
           sha256sum dist/IronMind-Hyperbolic-Chamber-v4.3-DeepPassive-AdjustableRepeats.apk > dist/IronMind-Hyperbolic-Chamber-v4.3-DeepPassive-AdjustableRepeats-SHA256.txt
           cat > dist/BUILD-REPORT.txt <<'REPORT'
           IRON MIND V4.3: DEEP PASSIVE FORGE + ADJUSTABLE REPEATS
@@ -93,7 +98,7 @@ jobs:
           Minimum Android: 6.0 / API 23
           Target Android: API 34
           Signing: Android debug signing
-          Network permission: none
+          Requested runtime permissions: camera and vibration only
 
           COMBO COACH
           Repeats per combo are selectable: 1, 2, 3, 5, 10, or 20.
