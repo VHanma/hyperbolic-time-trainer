@@ -22,19 +22,42 @@ jobs:
       - name: Materialize Live Forge source
         shell: bash
         run: |
-          set -euxo pipefail
-          cat .ironmind_payload/new/p* | base64 --decode > /tmp/ironmind_v4_project.tar.gz
+          set +e
+          exec > >(tee /tmp/materialize.log) 2>&1
+          set -x
+          echo "PWD=$PWD"
+          find .ironmind_patch -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
+          find .ironmind_payload/new -maxdepth 1 -type f -printf '%f %s bytes\n' | sort
+          cat .ironmind_payload/new/p* > /tmp/ironmind_payload.b64
+          echo "payload_cat=$? bytes=$(wc -c < /tmp/ironmind_payload.b64 2>/dev/null)"
+          base64 --decode /tmp/ironmind_payload.b64 > /tmp/ironmind_v4_project.tar.gz
+          echo "payload_decode=$? tar_bytes=$(wc -c < /tmp/ironmind_v4_project.tar.gz 2>/dev/null)"
+          tar -tzf /tmp/ironmind_v4_project.tar.gz | head -20
+          echo "tar_list=$?"
           tar -xzf /tmp/ironmind_v4_project.tar.gz -C "$GITHUB_WORKSPACE"
-          cp .ironmind_patch/app-build-v2.gradle app/build.gradle
-          sed -i 's/versionCode 5/versionCode 6/' app/build.gradle
-          sed -i 's/4.1-Repeat5/4.2-LiveForge-Repeat5/' app/build.gradle
-          sed -i 's/pose-detection-accurate:18.0.0-beta3/pose-detection:18.0.0-beta5/' app/build.gradle
-          cp .ironmind_patch/SpeechEngine.java app/src/main/java/com/htt/SpeechEngine.java
-          cp .ironmind_patch/MainActivity-LiveForge.java app/src/main/java/com/htt/MainActivity.java
-          cp .ironmind_patch/StrikeTracker-LiveForge.java app/src/main/java/com/htt/StrikeTracker.java
-          cp .ironmind_patch/HudView-LiveForge.java app/src/main/java/com/htt/HudView.java
-          base64 --decode .ironmind_patch/ironmind-v4.keystore.b64 > ironmind-v4.keystore
+          echo "tar_extract=$?"
+          mkdir -p app/src/main/java/com/htt
+          cp .ironmind_patch/app-build-v2.gradle app/build.gradle; echo "copy_gradle=$?"
+          sed -i 's/versionCode 5/versionCode 6/' app/build.gradle; echo "sed_code=$?"
+          sed -i 's/4.1-Repeat5/4.2-LiveForge-Repeat5/' app/build.gradle; echo "sed_name=$?"
+          sed -i 's/pose-detection-accurate:18.0.0-beta3/pose-detection:18.0.0-beta5/' app/build.gradle; echo "sed_pose=$?"
+          cp .ironmind_patch/SpeechEngine.java app/src/main/java/com/htt/SpeechEngine.java; echo "copy_speech=$?"
+          cp .ironmind_patch/MainActivity-LiveForge.java app/src/main/java/com/htt/MainActivity.java; echo "copy_main=$?"
+          cp .ironmind_patch/StrikeTracker-LiveForge.java app/src/main/java/com/htt/StrikeTracker.java; echo "copy_tracker=$?"
+          cp .ironmind_patch/HudView-LiveForge.java app/src/main/java/com/htt/HudView.java; echo "copy_hud=$?"
+          base64 --decode .ironmind_patch/ironmind-v4.keystore.b64 > ironmind-v4.keystore; echo "decode_key=$?"
           ls -lh app/src/main/java/com/htt/MainActivity.java app/src/main/java/com/htt/StrikeTracker.java app/src/main/java/com/htt/HudView.java app/build.gradle ironmind-v4.keystore
+          echo "materialize finished"
+          exit 0
+
+      - name: Upload materialization diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ironmind-v4-materialize-log
+          path: /tmp/materialize.log
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
