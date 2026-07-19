@@ -52,13 +52,21 @@ jobs:
           set +e
           ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/gradle-build.log
           status=${PIPESTATUS[0]}
+          grep -nE "(^| )error:|FAILURE:|What went wrong:|Execution failed|Could not resolve|Caused by:" /tmp/gradle-build.log | tail -160 > /tmp/concise-build-errors.txt || true
           if [ "$status" -ne 0 ]; then
-            echo "===== CONCISE BUILD FAILURE ====="
-            grep -nE "(^| )error:|FAILURE:|What went wrong:|Execution failed|Could not resolve|Caused by:" /tmp/gradle-build.log | tail -120 || true
-            echo "===== FINAL 120 LINES ====="
-            tail -120 /tmp/gradle-build.log
             exit "$status"
           fi
+
+      - name: Upload compiler diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ironmind-v4-build-log
+          path: |
+            /tmp/gradle-build.log
+            /tmp/concise-build-errors.txt
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Package deliverables
         shell: bash
