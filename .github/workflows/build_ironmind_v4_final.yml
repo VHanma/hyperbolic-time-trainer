@@ -46,7 +46,7 @@ jobs:
           cp .ironmind_patch/StrikeTracker-LiveForge.java app/src/main/java/com/htt/StrikeTracker.java; echo "copy_tracker=$?"
           cp .ironmind_patch/HudView-LiveForge.java app/src/main/java/com/htt/HudView.java; echo "copy_hud=$?"
           python .ironmind_patch/fix-liveforge-passive.py; echo "fix_passive=$?"
-          base64 --decode .ironmind_patch/ironmind-v4.keystore.b64 > ironmind-v4.keystore; echo "decode_key=$?"
+          python .ironmind_patch/decode-keystore.py; echo "decode_key=$?"
           ls -lh app/src/main/java/com/htt/MainActivity.java app/src/main/java/com/htt/StrikeTracker.java app/src/main/java/com/htt/HudView.java app/build.gradle ironmind-v4.keystore
           echo "materialize finished"
           exit 0
