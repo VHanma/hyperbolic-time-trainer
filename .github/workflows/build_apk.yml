@@ -30,6 +30,7 @@ jobs:
           echo "a59ad0e4f032b0d76e0ec871326f4a3e50d7e037845c54bfac15400f6a0e3036  /tmp/ironmind_v4_project.tar.gz" | sha256sum -c -
           tar -tzf /tmp/ironmind_v4_project.tar.gz > /dev/null
           tar -xzf /tmp/ironmind_v4_project.tar.gz -C "$GITHUB_WORKSPACE"
+          cp .ironmind_patch/app-build.gradle app/build.gradle
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -75,7 +76,7 @@ jobs:
           mkdir -p dist
           cp app/build/outputs/apk/release/app-release.apk dist/IronMind-Hyperbolic-Chamber-v4.apk
           sha256sum dist/IronMind-Hyperbolic-Chamber-v4.apk > dist/IronMind-Hyperbolic-Chamber-v4-SHA256.txt
-          zip -qr dist/IronMind-Hyperbolic-Chamber-v4-Source.zip app build.gradle settings.gradle README.md .github
+          zip -qr dist/IronMind-Hyperbolic-Chamber-v4-Source.zip app build.gradle settings.gradle README.md .github .ironmind_patch
 
       - name: Upload APK and source
         uses: actions/upload-artifact@v4
