@@ -31,6 +31,7 @@ jobs:
           tar -tzf /tmp/ironmind_v4_project.tar.gz > /dev/null
           tar -xzf /tmp/ironmind_v4_project.tar.gz -C "$GITHUB_WORKSPACE"
           cp .ironmind_patch/app-build.gradle app/build.gradle
+          cp .ironmind_patch/SpeechEngine.java app/src/main/java/com/htt/SpeechEngine.java
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
