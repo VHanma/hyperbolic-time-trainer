@@ -1,0 +1,196 @@
+io.getSelectedItem(), 0.08f);
+            callComboLoop(true);
+        });
+        stop.setOnClickListener(v -> {
+            finishSession("fusion");
+            if (hudView != null) hudView.setComboPrompt("Fusion stopped", "");
+        });
+    }
+
+    private void callComboLoop(boolean fusion) {
+        if (sessionEndsMs <= System.currentTimeMillis() || (fusion && currentMode != MODE_FUSION) || (!fusion && currentMode != MODE_COMBO)) {
+            finishSession(fusion ? "fusion" : "combo");
+            if (comboText != null) comboText.setText("ROUND COMPLETE");
+            if (hudView != null) hudView.setComboPrompt("ROUND COMPLETE", densitySummary());
+            return;
+        }
+        if (currentCombo == null || comboRepeatIndex >= comboRepetitions) {
+            currentCombo = bank.randomCombo(activeCategory);
+            comboRepeatIndex = 0;
+        }
+        comboRepeatIndex++;
+        expectedIndex = 0;
+        currentRepetitionCompleted = false;
+        combosCalled++;
+        String call = currentCombo.spoken;
+        String repeatLabel = "REP " + comboRepeatIndex + " / " + comboRepetitions;
+        speech.speakCoach("Repeat " + comboRepeatIndex + " of " + comboRepetitions + ". " + call);
+        if (whisperEnabled) {
+            handler.postDelayed(() -> {
+                if (sessionEndsMs > System.currentTimeMillis()) speech.speakWhisper(bank.matchedAffirmation(currentCombo));
+            }, 220L);
+        }
+        if (fusion && hudView != null) {
+            hudView.setComboPrompt(call, repeatLabel + "  |  " + expectedProgress());
+        } else if (comboText != null) {
+            comboText.setText(call + "\n\n" + repeatLabel + "\n" + densitySummary());
+        }
+        handler.postDelayed(() -> callComboLoop(fusion), callIntervalMs);
+    }
+
+    private void onDetectedStrike(StrikeTracker.StrikeResult r) {
+        if (currentMode == MODE_FUSION && currentCombo != null && !currentCombo.expectedPunches.isEmpty()) {
+            if (!currentRepetitionCompleted) {
+                String expected = currentCombo.expectedPunches.get(Math.min(expectedIndex, currentCombo.expectedPunches.size() - 1));
+                if (strikeMatches(expected, r.punchType)) {
+                    expectedIndex++;
+                    if (expectedIndex >= currentCombo.expectedPunches.size()) {
+                        currentRepetitionCompleted = true;
+                        combosCompleted++;
+                        expectedIndex = currentCombo.expectedPunches.size();
+                    }
+                }
+            }
+            hudView.setComboPrompt(currentCombo.spoken, "REP " + comboRepeatIndex + " / " + comboRepetitions + "  |  " + expectedProgress());
+        }
+    }
+
+    private String expectedProgress() {
+        if (currentCombo == null || currentCombo.expectedPunches.isEmpty()) return densitySummary();
+        return "Detected " + expectedIndex + " / " + currentCombo.expectedPunches.size() + " punches  |  " + densitySummary();
+    }
+
+    private boolean strikeMatches(String expected, String actual) {
+        if (expected.equals(actual)) return true;
+        return (expected.equals("CROSS") && actual.equals("OVERHAND")) || (expected.equals("OVERHAND") && actual.equals("CROSS"));
+    }
+
+    private void startCamera() {
+        ListenableFuture<ProcessCameraProvider> future = ProcessCameraProvider.getInstance(this);
+        future.addListener(() -> {
+            try {
+                cameraProvider = future.get();
+                bindCamera();
+            } catch (Exception e) {
+                Toast.makeText(this, "Camera could not start: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        }, ContextCompat.getMainExecutor(this));
+    }
+
+    private void bindCamera() {
+        if (cameraProvider == null || previewView == null) return;
+        cameraProvider.unbindAll();
+        CameraSelector selector;
+        try {
+            selector = new CameraSelector.Builder().requireLensFacing(lensFacing).build();
+            if (!cameraProvider.hasCamera(selector)) {
+                lensFacing = CameraSelector.LENS_FACING_BACK;
+                selector = new CameraSelector.Builder().requireLensFacing(lensFacing).build();
+            }
+        } catch (Exception e) {
+            return;
+        }
+        int targetRotation = previewView.getDisplay() == null ? 0 : previewView.getDisplay().getRotation();
+        Preview preview = new Preview.Builder()
+                .setTargetRotation(targetRotation)
+                .build();
+        preview.setSurfaceProvider(previewView.getSurfaceProvider());
+        ImageAnalysis analysis = new ImageAnalysis.Builder()
+                .setTargetRotation(targetRotation)
+                .setTargetResolution(new Size(640, 480))
+                .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .build();
+        strikeTracker = new StrikeTracker(strikeDb, prefs, (result, isNewPb) -> {
+            runOnUiThread(() -> {
+                hudView.onStrike(result,
+                        strikeDb.getPersonalBest("speed"),
+                        strikeDb.getPersonalBest("power"),
+                        strikeDb.getPersonalBest("level"),
+                        strikeDb.getTotalStrikes(),
+                        strikeDb.getPerfectStrikes(),
+                        isNewPb);
+                onDetectedStrike(result);
+            });
+        });
+        strikeTracker.resetCalibration();
+        lastTrackingStatus = "";
+        lastLiveReadout = "";
+        analysis.setAnalyzer(cameraExecutor, imageProxy -> analyzeFrame(imageProxy));
+        try {
+            cameraProvider.bindToLifecycle(this, selector, preview, analysis);
+            hudView.setTrackingStatus("STARTING FAST POSE TRACKER");
+            hudView.setLiveReadout("Stand at a 30-45 degree angle and hold your normal guard still");
+        } catch (Exception e) {
+            hudView.setTrackingStatus("CAMERA BIND FAILED");
+        }
+    }
+
+    private void analyzeFrame(ImageProxy imageProxy) {
+        if (imageProxy.getImage() == null) {
+            imageProxy.close();
+            return;
+        }
+        InputImage image = InputImage.fromMediaImage(imageProxy.getImage(), imageProxy.getImageInfo().getRotationDegrees());
+        long timestampMs = imageProxy.getImageInfo().getTimestamp() / 1_000_000L;
+        poseDetector.process(image)
+                .addOnSuccessListener(cameraExecutor, pose -> {
+                    if (strikeTracker != null) {
+                        strikeTracker.processPose(pose, timestampMs);
+                        String status = strikeTracker.getLiveStatus();
+                        String readout = strikeTracker.getLiveReadout();
+                        if (!status.equals(lastTrackingStatus) || !readout.equals(lastLiveReadout)) {
+                            lastTrackingStatus = status;
+                            lastLiveReadout = readout;
+                            runOnUiThread(() -> {
+                                if (hudView != null) {
+                                    hudView.setTrackingStatus(status);
+                                    hudView.setLiveReadout(readout);
+                                }
+                            });
+                        }
+                    }
+                })
+                .addOnFailureListener(cameraExecutor, e -> {
+                    if (hudView != null) runOnUiThread(() -> {
+                        hudView.setTrackingStatus("TRACKING ERROR");
+                        hudView.setLiveReadout("The pose model lost the frame. Improve light and reframe.");
+                    });
+                })
+                .addOnCompleteListener(cameraExecutor, task -> imageProxy.close());
+    }
+
+    private void showCalibration() {
+        final LinearLayout form = vertical(10);
+        form.setPadding(dp(18), dp(8), dp(18), dp(4));
+        EditText weight = numberInput(String.valueOf(prefs.getFloat("body_weight_lb", 150f)), "Body weight in pounds");
+        EditText shoulder = decimalInput(String.valueOf(prefs.getFloat("shoulder_width_in", 17f)), "Shoulder width in inches");
+        Spinner stance = spinner(new String[]{"Orthodox", "Southpaw"});
+        stance.setSelection(prefs.getBoolean("orthodox", true) ? 0 : 1);
+        form.addView(text("Body weight (lb)", 15, Color.WHITE, true)); form.addView(weight, fullWrap(0));
+        form.addView(text("Shoulder width (in)", 15, Color.WHITE, true)); form.addView(shoulder, fullWrap(0));
+        form.addView(text("Primary stance", 15, Color.WHITE, true)); form.addView(stance, fullWrap(0));
+        TextView note = text("Current defaults also assume 5'7 height, 71-inch wingspan, 31-inch left chest-to-knuckle reach and 26-inch right shoulder-to-knuckle reach. Shoulder width anchors the live physical scale. Each live session separately learns your exact guard and camera angle.", 13, 0xFFB8C1CC, false);
+        form.addView(note, fullWrap(8));
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("Personal calibration")
+                .setView(form)
+                .setNegativeButton("CANCEL", null)
+                .create();
+        form.addView(actionButtonWith("SAVE", () -> {
+            try {
+                float w = Float.parseFloat(weight.getText().toString());
+                float s = Float.parseFloat(shoulder.getText().toString());
+                prefs.edit().putFloat("body_weight_lb", w).putFloat("shoulder_width_in", s)
+                        .putBoolean("orthodox", stance.getSelectedItemPosition() == 0).apply();
+                if (strikeTracker != null) strikeTracker.resetCalibration();
+                Toast.makeText(this, "Body settings saved. Live guard calibration reset.", Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+            } catch (NumberFormatException e) {
+                Toast.makeText(this, "Enter valid numbers", Toast.LENGTH_SHORT).show();
+            }
+        }));
+        dialog.show();
+    }
+
+    pri
