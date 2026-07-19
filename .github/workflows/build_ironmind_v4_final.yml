@@ -1,4 +1,4 @@
-name: Build Iron Mind V4.1 Repeat5 APK
+name: Build Iron Mind V4.2 LiveForge Repeat5 APK
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Materialize verified V4 source and signing identity
+      - name: Materialize verified V4 source and Live Forge patches
         shell: bash
         run: |
           set -euo pipefail
@@ -31,10 +31,16 @@ jobs:
           tar -tzf /tmp/ironmind_v4_project.tar.gz > /dev/null
           tar -xzf /tmp/ironmind_v4_project.tar.gz -C "$GITHUB_WORKSPACE"
           cp .ironmind_patch/app-build-v2.gradle app/build.gradle
+          sed -i 's/versionCode 5/versionCode 6/' app/build.gradle
+          sed -i 's/4.1-Repeat5/4.2-LiveForge-Repeat5/' app/build.gradle
+          sed -i 's/pose-detection-accurate:18.0.0-beta3/pose-detection:18.0.0-beta5/' app/build.gradle
           cp .ironmind_patch/SpeechEngine.java app/src/main/java/com/htt/SpeechEngine.java
-          python .ironmind_patch/apply-repeat5.py
+          cp .ironmind_patch/MainActivity-LiveForge.java app/src/main/java/com/htt/MainActivity.java
+          cp .ironmind_patch/StrikeTracker-LiveForge.java app/src/main/java/com/htt/StrikeTracker.java
+          cp .ironmind_patch/HudView-LiveForge.java app/src/main/java/com/htt/HudView.java
           grep -q 'COMBO_REPETITIONS = 5' app/src/main/java/com/htt/MainActivity.java
-          grep -q 'Repeat " + comboRepeatIndex + " of " + COMBO_REPETITIONS' app/src/main/java/com/htt/MainActivity.java
+          grep -q 'ArmPhase { GUARD, EXTENDING, RETURNING, COOLDOWN }' app/src/main/java/com/htt/StrikeTracker.java
+          grep -q 'pose-detection:18.0.0-beta5' app/build.gradle
           base64 --decode .ironmind_patch/ironmind-v4.keystore.b64 > ironmind-v4.keystore
           echo "cb499cba21b5aa129b7bdb66f0536be60efe39b401410c2c1146cec6e1fe5374  ironmind-v4.keystore" | sha256sum -c -
 
@@ -59,7 +65,7 @@ jobs:
           set +e
           ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/gradle-build.log
           status=${PIPESTATUS[0]}
-          grep -nE "(^| )error:|FAILURE:|What went wrong:|Execution failed|Could not resolve|Caused by:" /tmp/gradle-build.log | tail -160 > /tmp/concise-build-errors.txt || true
+          grep -nE "(^| )error:|FAILURE:|What went wrong:|Execution failed|Could not resolve|Caused by:" /tmp/gradle-build.log | tail -180 > /tmp/concise-build-errors.txt || true
           if [ "$status" -ne 0 ]; then
             exit "$status"
           fi
@@ -68,7 +74,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: ironmind-v4-repeat5-build-log
+          name: ironmind-v4-liveforge-build-log
           path: |
             /tmp/gradle-build.log
             /tmp/concise-build-errors.txt
@@ -80,33 +86,33 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk dist/IronMind-Hyperbolic-Chamber-v4.1-Repeat5.apk
+          cp app/build/outputs/apk/release/app-release.apk dist/IronMind-Hyperbolic-Chamber-v4.2-LiveForge-Repeat5.apk
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
-          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs dist/IronMind-Hyperbolic-Chamber-v4.1-Repeat5.apk | tee dist/APK-SIGNATURE-REPORT.txt
-          "$BUILD_TOOLS/aapt" dump badging dist/IronMind-Hyperbolic-Chamber-v4.1-Repeat5.apk | tee dist/APK-BADGING-REPORT.txt
-          sha256sum dist/IronMind-Hyperbolic-Chamber-v4.1-Repeat5.apk > dist/IronMind-Hyperbolic-Chamber-v4.1-Repeat5-SHA256.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs dist/IronMind-Hyperbolic-Chamber-v4.2-LiveForge-Repeat5.apk | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BUILD_TOOLS/aapt" dump badging dist/IronMind-Hyperbolic-Chamber-v4.2-LiveForge-Repeat5.apk | tee dist/APK-BADGING-REPORT.txt
+          sha256sum dist/IronMind-Hyperbolic-Chamber-v4.2-LiveForge-Repeat5.apk > dist/IronMind-Hyperbolic-Chamber-v4.2-LiveForge-Repeat5-SHA256.txt
           cat > dist/BUILD-REPORT.txt <<'REPORT'
-          IRON MIND V4.1: HYPERBOLIC FIGHT CHAMBER REPEAT5
+          IRON MIND V4.2: LIVE FORGE REPEAT5
           Package: com.vhanma.ironmindv4
-          Version: 4.1-Repeat5 (code 5)
+          Version: 4.2-LiveForge-Repeat5 (code 6)
           Minimum Android: 6.0 / API 23
           Target Android: API 34
           Build type: release, stable personal signing identity
           Network permission: none
           Combo behavior: every selected combo is called five consecutive times before advancing
-          Repeat display: REP 1/5 through REP 5/5
-          Quiet matched affirmations: played beneath every repetition when enabled
-          Fusion counting: each repetition can be completed only once
-          Core modes: Passive Chamber, Nemesis Combo Coach, Live Vision Analysis, Fusion Chamber, Calibration, Research Report
-          Camera output: estimated speed, modeled force range, mechanics, guard return, balance, and confidence
-          Important: force is a camera-based model, not a direct load-cell measurement. Torch pulse timing varies by phone hardware.
+          Live detector: session-specific guard calibration and separate left/right arm state machines
+          Strike phases: guard, extension, peak, return, cooldown
+          False-positive controls: full-strike displacement, return requirement, landmark confidence, FPS and scale stability gates
+          Readable status: calibration progress, active hand, return wait, ignored-motion reason and processed FPS
+          Speed: camera-derived sampling-aware MPH range
+          Force: modeled hypothetical impact range, not a direct load-cell measurement
           REPORT
-          zip -qr dist/IronMind-Hyperbolic-Chamber-v4.1-Repeat5-Source.zip app build.gradle settings.gradle README.md .github .ironmind_patch
+          zip -qr dist/IronMind-Hyperbolic-Chamber-v4.2-LiveForge-Repeat5-Source.zip app build.gradle settings.gradle README.md .github .ironmind_patch
 
       - name: Upload final APK and source
         uses: actions/upload-artifact@v4
         with:
-          name: ironmind-hyperbolic-v4-repeat5-final
+          name: ironmind-hyperbolic-v4-liveforge-repeat5-final
           path: dist/*
           if-no-files-found: error
           retention-days: 30
