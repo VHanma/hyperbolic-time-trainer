@@ -1,0 +1,199 @@
+.abs(symbol == null ? 0 : symbol.hashCode());
+            long[] pattern;
+            if (hash % 3 == 0) pattern = new long[]{0, 28, 70, 28};
+            else if (hash % 3 == 1) pattern = new long[]{0, 45};
+            else pattern = new long[]{0, 18, 45, 18, 45, 32};
+            if (Build.VERSION.SDK_INT >= 26) vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1));
+            else vibrator.vibrate(pattern, -1);
+        } catch (Exception ignored) { }
+    }
+
+    private void showPassiveLogDialog() {
+        ScrollView scroll = new ScrollView(this);
+        TextView body = text(passiveLog.isEmpty() ? "No passive messages have been delivered yet." : joinPassiveLog(), 14, 0xFFE5EDF5, false);
+        body.setPadding(dp(16), dp(14), dp(16), dp(18));
+        scroll.addView(body);
+        new AlertDialog.Builder(this)
+                .setTitle("Passive delivery log")
+                .setView(scroll)
+                .setPositiveButton("CLOSE", null)
+                .show();
+    }
+
+    private String joinPassiveLog() {
+        StringBuilder out = new StringBuilder();
+        for (String line : passiveLog) {
+            if (out.length() > 0) out.append("\n\n");
+            out.append(line);
+        }
+        return out.toString();
+    }
+
+    private void showComboCoach() {
+        stopEverything();
+        currentMode = MODE_COMBO;
+        root.removeAllViews();
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        strobeView = new StrobeView(this);
+        root.addView(strobeView, match());
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout panel = vertical(10);
+        panel.setPadding(dp(16), dp(18), dp(16), dp(28));
+        scroll.addView(panel);
+        root.addView(scroll, match());
+        addHeader(panel, "NEMESIS COMBO COACH", "Choose how many consecutive repetitions each combo receives before the next one is drawn.");
+
+        Spinner category = spinner(bank.categories().toArray(new String[0]));
+        category.setSelection(bank.categories().indexOf(ComboBank.CAT_MIXED));
+        Spinner duration = spinner(new String[]{"1 minute", "3 minutes", "5 minutes", "10 minutes"});
+        Spinner pace = spinner(new String[]{"8 seconds", "6.5 seconds", "5 seconds", "3.5 seconds"});
+        Spinner repeats = spinner(new String[]{"1 time", "2 times", "3 times", "5 times", "10 times", "20 times"});
+        repeats.setSelection(3);
+        Spinner visual = spinner(visualProfiles);
+        Spinner audio = spinner(audioProfiles);
+        CheckBox whisper = check("Lower-volume matched affirmations beneath every repetition", true);
+        addLabeled(panel, "COMBO BANK", category);
+        addLabeled(panel, "ROUND", duration);
+        addLabeled(panel, "CALL INTERVAL", pace);
+        addLabeled(panel, "REPEATS PER COMBO", repeats);
+        addLabeled(panel, "VISUAL PROFILE", visual);
+        addLabeled(panel, "AUDIO PROFILE", audio);
+        panel.addView(whisper, fullWrap(4));
+
+        comboText = text("Press START", 25, Color.WHITE, true);
+        comboText.setGravity(Gravity.CENTER);
+        comboText.setBackground(round(0xDD0B1118, 18, 0xFF3A566B));
+        comboText.setPadding(dp(14), dp(24), dp(14), dp(24));
+        panel.addView(comboText, fullWrap(14));
+        sessionClock = text("00:00", 18, 0xFF68E9FF, true);
+        sessionClock.setGravity(Gravity.CENTER);
+        panel.addView(sessionClock, fullWrap(8));
+
+        LinearLayout controls = horizontal(8);
+        Button start = actionButton("START");
+        Button done = actionButton("DONE");
+        Button stop = actionButton("STOP");
+        controls.addView(start, weight()); controls.addView(done, weight()); controls.addView(stop, weight());
+        panel.addView(controls, fullWrap(14));
+        panel.addView(actionButtonWith("BACK", this::showHome), fullWrap(8));
+
+        start.setOnClickListener(v -> {
+            stopSessionOnly();
+            activeCategory = (String) category.getSelectedItem();
+            whisperEnabled = whisper.isChecked();
+            int mins = parseLeadingInt((String) duration.getSelectedItem(), 3);
+            callIntervalMs = (long) (parseLeadingDouble((String) pace.getSelectedItem(), 5) * 1000);
+            comboRepetitions = Math.max(1, parseLeadingInt((String) repeats.getSelectedItem(), 5));
+            prefs.edit().putInt("combo_repetitions", comboRepetitions).apply();
+            sessionStartedMs = System.currentTimeMillis();
+            sessionEndsMs = sessionStartedMs + mins * 60_000L;
+            combosCalled = combosCompleted = 0;
+            currentCombo = null;
+            comboRepeatIndex = 0;
+            currentRepetitionCompleted = false;
+            strobeView.startProfile((String) visual.getSelectedItem());
+            tones.start((String) audio.getSelectedItem(), 0.10f);
+            callComboLoop(false);
+            clockLoop();
+        });
+        done.setOnClickListener(v -> {
+            if (sessionEndsMs > System.currentTimeMillis() && currentCombo != null && !currentRepetitionCompleted) {
+                currentRepetitionCompleted = true;
+                combosCompleted++;
+                done.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM);
+                if (comboText != null) {
+                    comboText.setText(currentCombo.spoken + "\n\nREP " + comboRepeatIndex + " / " + comboRepetitions + " COMPLETE\n" + densitySummary());
+                }
+            }
+        });
+        stop.setOnClickListener(v -> {
+            finishSession("combo");
+            comboText.setText("Round stopped.");
+        });
+    }
+
+    private void showCamera(boolean fusion) {
+        stopEverything();
+        currentMode = fusion ? MODE_FUSION : MODE_VISION;
+        fusionRunning = fusion;
+        root.removeAllViews();
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        previewView = new PreviewView(this);
+        previewView.setScaleType(PreviewView.ScaleType.FILL_CENTER);
+        root.addView(previewView, match());
+        strobeView = new StrobeView(this);
+        root.addView(strobeView, match());
+        hudView = new HudView(this);
+        root.addView(hudView, match());
+
+        LinearLayout top = horizontal(8);
+        top.setPadding(dp(10), dp(10), dp(10), dp(10));
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        top.setBackgroundColor(0x99000000);
+        Button back = smallButton("BACK");
+        Button flip = smallButton("FLIP");
+        Button recalibrate = smallButton("RECAL");
+        Button body = smallButton("BODY");
+        top.addView(back); top.addView(flip); top.addView(recalibrate); top.addView(body);
+        FrameLayout.LayoutParams topLp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.TOP);
+        root.addView(top, topLp);
+        back.setOnClickListener(v -> showHome());
+        flip.setOnClickListener(v -> {
+            lensFacing = lensFacing == CameraSelector.LENS_FACING_FRONT ? CameraSelector.LENS_FACING_BACK : CameraSelector.LENS_FACING_FRONT;
+            bindCamera();
+        });
+        recalibrate.setOnClickListener(v -> {
+            if (strikeTracker != null) strikeTracker.resetCalibration();
+            if (hudView != null) {
+                hudView.setTrackingStatus("CALIBRATION RESET");
+                hudView.setLiveReadout("Hold your normal guard still for about two seconds");
+            }
+            Toast.makeText(this, "Live calibration reset. Hold guard still.", Toast.LENGTH_SHORT).show();
+        });
+        body.setOnClickListener(v -> showCalibration());
+
+        if (fusion) addFusionControls();
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            startCamera();
+        } else {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION);
+        }
+    }
+
+    private void addFusionControls() {
+        LinearLayout bottom = vertical(7);
+        bottom.setPadding(dp(10), dp(8), dp(10), dp(12));
+        bottom.setBackgroundColor(0xB6000000);
+        Spinner category = spinner(bank.categories().toArray(new String[0]));
+        category.setSelection(bank.categories().indexOf(ComboBank.CAT_MIXED));
+        Spinner visual = spinner(new String[]{"Off", "Occlusion 10Hz / 70% open", "Occlusion 8Hz / 60% open", "Occlusion 7Hz / 55% open", "Occlusion 5Hz / 50% open", "Temporal 4Hz low contrast"});
+        Spinner audio = spinner(audioProfiles);
+        Spinner repeats = spinner(new String[]{"1 repeat", "2 repeats", "3 repeats", "5 repeats", "10 repeats", "20 repeats"});
+        repeats.setSelection(3);
+        bottom.addView(category, fullWrap(0));
+        bottom.addView(visual, fullWrap(2));
+        bottom.addView(audio, fullWrap(2));
+        bottom.addView(repeats, fullWrap(2));
+        LinearLayout row = horizontal(8);
+        Button start = smallButton("START FUSION");
+        Button stop = smallButton("STOP");
+        row.addView(start, weight()); row.addView(stop, weight());
+        bottom.addView(row, fullWrap(4));
+        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
+        root.addView(bottom, lp);
+
+        start.setOnClickListener(v -> {
+            activeCategory = (String) category.getSelectedItem();
+            whisperEnabled = true;
+            callIntervalMs = 6500L;
+            comboRepetitions = Math.max(1, parseLeadingInt((String) repeats.getSelectedItem(), 5));
+            sessionStartedMs = System.currentTimeMillis();
+            sessionEndsMs = sessionStartedMs + 3 * 60_000L;
+            combosCalled = combosCompleted = 0;
+            currentCombo = null;
+            comboRepeatIndex = 0;
+            currentRepetitionCompleted = false;
+            strobeView.startProfile((String) visual.getSelectedItem());
+            tones.start((String) aud
