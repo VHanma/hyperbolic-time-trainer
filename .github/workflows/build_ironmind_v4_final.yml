@@ -53,6 +53,8 @@ jobs:
           echo "7f19506b6475425bf2cdbe1dfc852265d55554e6733f8c3b7ce54c0c91a8212b  /tmp/v44-patch.tar.gz" | sha256sum -c -
           tar -tzf /tmp/v44-patch.tar.gz > /tmp/v44-files.txt
           tar -xzf /tmp/v44-patch.tar.gz -C "$GITHUB_WORKSPACE"
+          sed -i 's/versionCode 7/versionCode 8/' app/build.gradle
+          sed -i 's/versionName "4.3-DeepPassive-AdjustableRepeats"/versionName "4.4-ImmersiveFlash-PositiveLanguage"/' app/build.gradle
 
           grep -q 'enterPassiveFullscreen' app/src/main/java/com/htt/MainActivity.java
           grep -q 'FLASHES PER MESSAGE' app/src/main/java/com/htt/MainActivity.java
