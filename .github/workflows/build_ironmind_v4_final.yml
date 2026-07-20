@@ -14,7 +14,6 @@ jobs:
   build-final:
     runs-on: ubuntu-latest
     timeout-minutes: 35
-
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -31,9 +30,30 @@ jobs:
           cp .ironmind_patch/v43/AndroidManifest.xml app/src/main/AndroidManifest.xml
           cp .ironmind_patch/StrikeTracker-LiveForge.java app/src/main/java/com/htt/StrikeTracker.java
           cp .ironmind_patch/HudView-LiveForge.java app/src/main/java/com/htt/HudView.java
-          base64 --decode .ironmind_patch/v44/patch.tar.gz.b64 > /tmp/v44-patch.tar.gz
+
+          cat \
+            .ironmind_patch/v44/p00 \
+            .ironmind_patch/v44/p01_00 \
+            .ironmind_patch/v44/p01_01 \
+            .ironmind_patch/v44/p01_02 \
+            .ironmind_patch/v44/p02_00 \
+            .ironmind_patch/v44/p02_01 > /tmp/v44-patch.b64
+          cat \
+            .ironmind_patch/v44/h00 \
+            .ironmind_patch/v44/h01 \
+            .ironmind_patch/v44/h02 \
+            .ironmind_patch/v44/h03 \
+            .ironmind_patch/v44/h04 \
+            .ironmind_patch/v44/h05 \
+            .ironmind_patch/v44/h06 | xxd -r -p >> /tmp/v44-patch.b64
+
+          test "$(wc -c < /tmp/v44-patch.b64)" -eq 29192
+          echo "81cd9bf6fbb7ea810cdc194f3c195e91f710f481436e53783b49366a8dadadfa  /tmp/v44-patch.b64" | sha256sum -c -
+          base64 --decode /tmp/v44-patch.b64 > /tmp/v44-patch.tar.gz
+          echo "7f19506b6475425bf2cdbe1dfc852265d55554e6733f8c3b7ce54c0c91a8212b  /tmp/v44-patch.tar.gz" | sha256sum -c -
           tar -tzf /tmp/v44-patch.tar.gz > /tmp/v44-files.txt
           tar -xzf /tmp/v44-patch.tar.gz -C "$GITHUB_WORKSPACE"
+
           grep -q 'enterPassiveFullscreen' app/src/main/java/com/htt/MainActivity.java
           grep -q 'FLASHES PER MESSAGE' app/src/main/java/com/htt/MainActivity.java
           grep -q 'Full-screen affirmation pulse' app/src/main/java/com/htt/MainActivity.java
@@ -71,9 +91,7 @@ jobs:
           ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/gradle-build.log
           status=${PIPESTATUS[0]}
           grep -nE "(^| )error:|FAILURE:|What went wrong:|Execution failed|Could not resolve|Caused by:" /tmp/gradle-build.log | tail -240 > /tmp/concise-build-errors.txt || true
-          if [ "$status" -ne 0 ]; then
-            exit "$status"
-          fi
+          exit "$status"
 
       - name: Upload compiler diagnostics
         if: failure()
@@ -92,15 +110,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          cp app/build/outputs/apk/release/app-release.apk dist/IronMind-Hyperbolic-Chamber-v4.4-ImmersiveFlash-PositiveLanguage.apk
+          APK=dist/IronMind-Hyperbolic-Chamber-v4.4-ImmersiveFlash-PositiveLanguage.apk
+          cp app/build/outputs/apk/release/app-release.apk "$APK"
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
-          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs dist/IronMind-Hyperbolic-Chamber-v4.4-ImmersiveFlash-PositiveLanguage.apk | tee dist/APK-SIGNATURE-REPORT.txt
-          "$BUILD_TOOLS/aapt" dump badging dist/IronMind-Hyperbolic-Chamber-v4.4-ImmersiveFlash-PositiveLanguage.apk | tee dist/APK-BADGING-REPORT.txt
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BUILD_TOOLS/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
           if grep -Eq "android.permission.(INTERNET|ACCESS_NETWORK_STATE|WAKE_LOCK|RECEIVE_BOOT_COMPLETED|FOREGROUND_SERVICE)'" dist/APK-BADGING-REPORT.txt; then
             echo "Unexpected network/background permission found in final APK"
             exit 1
           fi
-          sha256sum dist/IronMind-Hyperbolic-Chamber-v4.4-ImmersiveFlash-PositiveLanguage.apk > dist/IronMind-Hyperbolic-Chamber-v4.4-ImmersiveFlash-PositiveLanguage-SHA256.txt
+          sha256sum "$APK" > dist/IronMind-Hyperbolic-Chamber-v4.4-ImmersiveFlash-PositiveLanguage-SHA256.txt
           cat > dist/BUILD-REPORT.txt <<'REPORT'
           IRON MIND V4.4: IMMERSIVE FLASH CHAMBER + POSITIVE LANGUAGE
           Package: com.vhanma.ironmindv4
@@ -111,20 +130,19 @@ jobs:
           Requested runtime permissions: camera and vibration only
 
           PASSIVE FULL-SCREEN SESSION
-          START hides the settings panel, Android status bar and navigation bar.
+          START hides the settings panel, status bar and navigation bar.
           Session view contains the visual engine plus a small STOP control.
-          A screen tap reveals the timer and current mode briefly, then hides them again.
+          A screen tap reveals the timer and current mode briefly.
 
           AFFIRMATION FLASH ENGINE
           Delivery options include full-screen affirmation pulse, triple affirmation burst, edge prime storm, symbol-word alternation and masked burst stack.
-          Flashes per message are selectable: 1, 3, 5 or 8.
-          Flashed text can use reflex commands, full affirmations or alternate both.
-          Flash intensity is adjustable from 10% to 90%.
-          Full-field pulse timing is capped below three pulses per second; smaller low-contrast word fields may update faster.
+          Flashes per message: 1, 3, 5 or 8.
+          Flashed text: reflex commands, full affirmations or alternating.
+          Flash intensity: 10% to 90%.
+          Full-field pulses remain below three pulses per second.
 
           LANGUAGE FILTER
           Affirmation entries exclude don't, do not, no, not, won't, never, can't and related variants.
-          Positive rewrites replace every flagged message from the V4.3 bank.
 
           PRESERVED SYSTEMS
           Natural Coach, Deep Embed, Visual Threshold Lab, Peripheral Symbol, Sleep Consolidation and Fringe Laboratory remain included.
