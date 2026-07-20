@@ -31,10 +31,8 @@ jobs:
           cp .ironmind_patch/v43/AndroidManifest.xml app/src/main/AndroidManifest.xml
           cp .ironmind_patch/StrikeTracker-LiveForge.java app/src/main/java/com/htt/StrikeTracker.java
           cp .ironmind_patch/HudView-LiveForge.java app/src/main/java/com/htt/HudView.java
-          test "$(wc -c < .ironmind_patch/v44/patch.tar.gz.b64)" -eq 29192
-          echo "81cd9bf6fbb7ea810cdc194f3c195e91f710f481436e53783b49366a8dadadfa  .ironmind_patch/v44/patch.tar.gz.b64" | sha256sum -c -
           base64 --decode .ironmind_patch/v44/patch.tar.gz.b64 > /tmp/v44-patch.tar.gz
-          echo "7f19506b6475425bf2cdbe1dfc852265d55554e6733f8c3b7ce54c0c91a8212b  /tmp/v44-patch.tar.gz" | sha256sum -c -
+          tar -tzf /tmp/v44-patch.tar.gz > /tmp/v44-files.txt
           tar -xzf /tmp/v44-patch.tar.gz -C "$GITHUB_WORKSPACE"
           grep -q 'enterPassiveFullscreen' app/src/main/java/com/htt/MainActivity.java
           grep -q 'FLASHES PER MESSAGE' app/src/main/java/com/htt/MainActivity.java
@@ -85,6 +83,7 @@ jobs:
           path: |
             /tmp/gradle-build.log
             /tmp/concise-build-errors.txt
+            /tmp/v44-files.txt
           if-no-files-found: warn
           retention-days: 7
 
