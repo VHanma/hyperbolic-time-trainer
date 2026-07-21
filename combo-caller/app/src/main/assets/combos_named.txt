@@ -1,0 +1,498 @@
+Jab, Jab, Cross
+Jab, Jab, Hook
+Jab, Jab, Uppercut
+Jab, Jab, Overhand
+Jab, Jab, Elbow
+Jab, Hook, Cross
+Jab, Hook, Hook
+Jab, Hook, Uppercut
+Jab, Hook, Overhand
+Jab, Hook, Elbow
+Jab, Uppercut, Cross
+Jab, Uppercut, Hook
+Jab, Uppercut, Uppercut
+Jab, Uppercut, Overhand
+Jab, Uppercut, Elbow
+Jab, Overhand, Cross
+Jab, Overhand, Hook
+Jab, Overhand, Uppercut
+Jab, Overhand, Overhand
+Jab, Overhand, Elbow
+Jab, Elbow, Cross
+Jab, Elbow, Hook
+Jab, Elbow, Uppercut
+Jab, Elbow, Overhand
+Jab, Elbow, Elbow
+Jab, Cross, Cross
+Jab, Cross, Hook
+Jab, Cross, Uppercut
+Jab, Cross, Overhand
+Jab, Cross, Elbow
+Jab, Jab, Cross, Cross
+Jab, Jab, Cross, Hook
+Jab, Jab, Cross, Uppercut
+Jab, Jab, Cross, Overhand
+Jab, Jab, Cross, Elbow
+Jab, Hook, Cross, Hook
+Jab, Hook, Cross, Uppercut
+Jab, Hook, Cross, Overhand
+Jab, Hook, Cross, Elbow
+Jab, Uppercut, Cross, Hook
+Jab, Uppercut, Cross, Uppercut
+Jab, Uppercut, Cross, Overhand
+Jab, Uppercut, Cross, Elbow
+Jab, Overhand, Cross, Hook
+Jab, Overhand, Cross, Uppercut
+Jab, Overhand, Cross, Overhand
+Jab, Overhand, Cross, Elbow
+Jab, Elbow, Cross, Hook
+Jab, Elbow, Cross, Uppercut
+Jab, Elbow, Cross, Overhand
+Jab, Elbow, Cross, Elbow
+Jab, Cross, Hook, Cross
+Jab, Cross, Hook, Hook
+Jab, Cross, Hook, Uppercut
+Jab, Cross, Hook, Overhand
+Jab, Cross, Hook, Elbow
+Jab, Cross, Uppercut, Cross
+Jab, Cross, Uppercut, Hook
+Jab, Cross, Uppercut, Uppercut
+Jab, Cross, Uppercut, Overhand
+Jab, Cross, Uppercut, Elbow
+Jab, Cross, Overhand, Cross
+Jab, Cross, Overhand, Hook
+Jab, Cross, Overhand, Uppercut
+Jab, Cross, Overhand, Overhand
+Jab, Cross, Overhand, Elbow
+Jab, Cross, Elbow, Cross
+Jab, Cross, Elbow, Hook
+Jab, Cross, Elbow, Uppercut
+Jab, Cross, Elbow, Overhand
+Jab, Cross, Elbow, Elbow
+Jab, Jab, Cross, Hook, Cross
+Jab, Jab, Cross, Hook, Hook
+Jab, Jab, Cross, Hook, Uppercut
+Jab, Jab, Cross, Hook, Overhand
+Jab, Jab, Cross, Hook, Elbow
+Jab, Jab, Cross, Uppercut, Cross
+Jab, Jab, Cross, Uppercut, Hook
+Jab, Jab, Cross, Uppercut, Uppercut
+Jab, Jab, Cross, Uppercut, Overhand
+Jab, Jab, Cross, Uppercut, Elbow
+Jab, Jab, Cross, Overhand, Cross
+Jab, Jab, Cross, Overhand, Hook
+Jab, Jab, Cross, Overhand, Uppercut
+Jab, Jab, Cross, Overhand, Overhand
+Jab, Jab, Cross, Overhand, Elbow
+Jab, Jab, Cross, Elbow, Cross
+Jab, Jab, Cross, Elbow, Hook
+Jab, Jab, Cross, Elbow, Uppercut
+Jab, Jab, Cross, Elbow, Overhand
+Jab, Jab, Cross, Elbow, Elbow
+Jab, Hook, Cross, Hook, Cross
+Jab, Hook, Cross, Hook, Hook
+Jab, Hook, Cross, Hook, Uppercut
+Jab, Hook, Cross, Hook, Overhand
+Jab, Hook, Cross, Hook, Elbow
+Jab, Hook, Cross, Uppercut, Cross
+Jab, Hook, Cross, Uppercut, Hook
+Jab, Hook, Cross, Uppercut, Uppercut
+Jab, Hook, Cross, Uppercut, Overhand
+Jab, Hook, Cross, Uppercut, Elbow
+Jab, Hook, Cross, Overhand, Cross
+Jab, Hook, Cross, Overhand, Hook
+Jab, Hook, Cross, Overhand, Uppercut
+Jab, Hook, Cross, Overhand, Overhand
+Jab, Hook, Cross, Overhand, Elbow
+Jab, Hook, Cross, Elbow, Cross
+Jab, Hook, Cross, Elbow, Hook
+Jab, Hook, Cross, Elbow, Uppercut
+Jab, Hook, Cross, Elbow, Overhand
+Jab, Hook, Cross, Elbow, Elbow
+Jab, Uppercut, Cross, Hook, Cross
+Jab, Uppercut, Cross, Hook, Hook
+Jab, Uppercut, Cross, Hook, Uppercut
+Jab, Uppercut, Cross, Hook, Overhand
+Jab, Uppercut, Cross, Hook, Elbow
+Jab, Uppercut, Cross, Uppercut, Cross
+Jab, Uppercut, Cross, Uppercut, Hook
+Jab, Uppercut, Cross, Uppercut, Uppercut
+Jab, Uppercut, Cross, Uppercut, Overhand
+Jab, Uppercut, Cross, Uppercut, Elbow
+Jab, Uppercut, Cross, Overhand, Cross
+Jab, Uppercut, Cross, Overhand, Hook
+Jab, Uppercut, Cross, Overhand, Uppercut
+Jab, Uppercut, Cross, Overhand, Overhand
+Jab, Uppercut, Cross, Overhand, Elbow
+Jab, Uppercut, Cross, Elbow, Cross
+Jab, Uppercut, Cross, Elbow, Hook
+Jab, Uppercut, Cross, Elbow, Uppercut
+Jab, Uppercut, Cross, Elbow, Overhand
+Jab, Uppercut, Cross, Elbow, Elbow
+Jab, Overhand, Cross, Hook, Cross
+Jab, Overhand, Cross, Hook, Hook
+Jab, Overhand, Cross, Hook, Uppercut
+Jab, Overhand, Cross, Hook, Overhand
+Jab, Overhand, Cross, Hook, Elbow
+Jab, Overhand, Cross, Uppercut, Cross
+Jab, Overhand, Cross, Uppercut, Hook
+Jab, Overhand, Cross, Uppercut, Uppercut
+Jab, Overhand, Cross, Uppercut, Overhand
+Jab, Overhand, Cross, Uppercut, Elbow
+Jab, Overhand, Cross, Overhand, Cross
+Jab, Overhand, Cross, Overhand, Hook
+Jab, Overhand, Cross, Overhand, Uppercut
+Jab, Overhand, Cross, Overhand, Overhand
+Jab, Overhand, Cross, Overhand, Elbow
+Jab, Overhand, Cross, Elbow, Cross
+Jab, Overhand, Cross, Elbow, Hook
+Jab, Overhand, Cross, Elbow, Uppercut
+Jab, Overhand, Cross, Elbow, Overhand
+Jab, Overhand, Cross, Elbow, Elbow
+Jab, Elbow, Cross, Hook, Cross
+Jab, Elbow, Cross, Hook, Hook
+Jab, Elbow, Cross, Hook, Uppercut
+Jab, Elbow, Cross, Hook, Overhand
+Jab, Elbow, Cross, Hook, Elbow
+Jab, Elbow, Cross, Uppercut, Cross
+Jab, Elbow, Cross, Uppercut, Hook
+Jab, Elbow, Cross, Uppercut, Uppercut
+Jab, Elbow, Cross, Uppercut, Overhand
+Jab, Elbow, Cross, Uppercut, Elbow
+Jab, Elbow, Cross, Overhand, Cross
+Jab, Elbow, Cross, Overhand, Hook
+Jab, Elbow, Cross, Overhand, Uppercut
+Jab, Elbow, Cross, Overhand, Overhand
+Jab, Elbow, Cross, Overhand, Elbow
+Jab, Elbow, Cross, Elbow, Cross
+Jab, Elbow, Cross, Elbow, Hook
+Jab, Elbow, Cross, Elbow, Uppercut
+Jab, Elbow, Cross, Elbow, Overhand
+Jab, Elbow, Cross, Elbow, Elbow
+Jab, Cross, Hook, Cross, Cross
+Jab, Cross, Hook, Cross, Hook
+Jab, Cross, Hook, Cross, Uppercut
+Jab, Cross, Hook, Cross, Overhand
+Jab, Cross, Hook, Cross, Elbow
+Jab, Cross, Hook, Hook, Cross
+Jab, Cross, Hook, Hook, Hook
+Jab, Cross, Hook, Hook, Uppercut
+Jab, Cross, Hook, Hook, Overhand
+Jab, Cross, Hook, Hook, Elbow
+Jab, Cross, Hook, Uppercut, Cross
+Jab, Cross, Hook, Uppercut, Hook
+Jab, Cross, Hook, Uppercut, Uppercut
+Jab, Cross, Hook, Uppercut, Overhand
+Jab, Cross, Hook, Uppercut, Elbow
+Jab, Cross, Hook, Overhand, Cross
+Jab, Cross, Hook, Overhand, Hook
+Jab, Cross, Hook, Overhand, Uppercut
+Jab, Cross, Hook, Overhand, Overhand
+Jab, Cross, Hook, Overhand, Elbow
+Jab, Cross, Hook, Elbow, Cross
+Jab, Cross, Hook, Elbow, Hook
+Jab, Cross, Hook, Elbow, Uppercut
+Jab, Cross, Hook, Elbow, Overhand
+Jab, Cross, Hook, Elbow, Elbow
+Jab, Cross, Uppercut, Cross, Cross
+Jab, Cross, Uppercut, Cross, Hook
+Jab, Cross, Uppercut, Cross, Uppercut
+Jab, Cross, Uppercut, Cross, Overhand
+Jab, Cross, Uppercut, Cross, Elbow
+Jab, Cross, Uppercut, Hook, Cross
+Jab, Cross, Uppercut, Hook, Hook
+Jab, Cross, Uppercut, Hook, Uppercut
+Jab, Cross, Uppercut, Hook, Overhand
+Jab, Cross, Uppercut, Hook, Elbow
+Jab, Cross, Uppercut, Uppercut, Cross
+Jab, Cross, Uppercut, Uppercut, Hook
+Jab, Cross, Uppercut, Uppercut, Uppercut
+Jab, Cross, Uppercut, Uppercut, Overhand
+Jab, Cross, Uppercut, Uppercut, Elbow
+Jab, Cross, Uppercut, Overhand, Cross
+Jab, Cross, Uppercut, Overhand, Hook
+Jab, Cross, Uppercut, Overhand, Uppercut
+Jab, Cross, Uppercut, Overhand, Overhand
+Jab, Cross, Uppercut, Overhand, Elbow
+Jab, Cross, Uppercut, Elbow, Cross
+Jab, Cross, Uppercut, Elbow, Hook
+Jab, Cross, Uppercut, Elbow, Uppercut
+Jab, Cross, Uppercut, Elbow, Overhand
+Jab, Cross, Uppercut, Elbow, Elbow
+Jab, Cross, Overhand, Cross, Cross
+Jab, Cross, Overhand, Cross, Hook
+Jab, Cross, Overhand, Cross, Uppercut
+Jab, Cross, Overhand, Cross, Overhand
+Jab, Cross, Overhand, Cross, Elbow
+Jab, Cross, Overhand, Hook, Cross
+Jab, Cross, Overhand, Hook, Hook
+Jab, Cross, Overhand, Hook, Uppercut
+Jab, Cross, Overhand, Hook, Overhand
+Jab, Cross, Overhand, Hook, Elbow
+Jab, Cross, Overhand, Uppercut, Cross
+Jab, Cross, Overhand, Uppercut, Hook
+Jab, Cross, Overhand, Uppercut, Uppercut
+Jab, Cross, Overhand, Uppercut, Overhand
+Jab, Cross, Overhand, Uppercut, Elbow
+Jab, Cross, Overhand, Overhand, Cross
+Jab, Cross, Overhand, Overhand, Hook
+Jab, Cross, Overhand, Overhand, Uppercut
+Jab, Cross, Overhand, Overhand, Overhand
+Jab, Cross, Overhand, Overhand, Elbow
+Jab, Cross, Overhand, Elbow, Cross
+Jab, Cross, Overhand, Elbow, Hook
+Jab, Cross, Overhand, Elbow, Uppercut
+Jab, Cross, Overhand, Elbow, Overhand
+Jab, Cross, Overhand, Elbow, Elbow
+Jab, Cross, Elbow, Cross, Cross
+Jab, Cross, Elbow, Cross, Hook
+Jab, Cross, Elbow, Cross, Uppercut
+Jab, Cross, Elbow, Cross, Overhand
+Jab, Cross, Elbow, Cross, Elbow
+Jab, Cross, Elbow, Hook, Cross
+Jab, Cross, Elbow, Hook, Hook
+Jab, Cross, Elbow, Hook, Uppercut
+Jab, Cross, Elbow, Hook, Overhand
+Jab, Cross, Elbow, Hook, Elbow
+Jab, Cross, Elbow, Uppercut, Cross
+Jab, Cross, Elbow, Uppercut, Hook
+Jab, Cross, Elbow, Uppercut, Uppercut
+Jab, Cross, Elbow, Uppercut, Overhand
+Jab, Cross, Elbow, Uppercut, Elbow
+Jab, Cross, Elbow, Overhand, Cross
+Jab, Cross, Elbow, Overhand, Hook
+Jab, Cross, Elbow, Overhand, Uppercut
+Jab, Cross, Elbow, Overhand, Overhand
+Jab, Cross, Elbow, Overhand, Elbow
+Jab, Cross, Elbow, Elbow, Cross
+Jab, Cross, Elbow, Elbow, Hook
+Jab, Cross, Elbow, Elbow, Uppercut
+Jab, Cross, Elbow, Elbow, Overhand
+Jab, Cross, Elbow, Elbow, Elbow
+Jab, Jab
+Jab, Hook
+Jab, Uppercut
+Jab, Overhand
+Jab, Elbow
+Jab, Cross
+Fake Jab, Jab
+Jab, Fake Jab
+Fake Jab, Hook
+Jab, Fake Hook
+Fake Jab, Uppercut
+Jab, Fake Uppercut
+Fake Jab, Overhand
+Jab, Fake Overhand
+Fake Jab, Elbow
+Jab, Fake Elbow
+Fake Jab, Cross
+Jab, Fake Cross
+Double Jab
+Jab Head, Jab Body
+Jab Body, Jab Head
+Double Jab to Body
+Jab, Cross
+Jab Head, Cross Body
+Jab Body, Cross Head
+Jab Body, Cross Body
+Jab, Lead Hook
+Jab Body, Lead Hook Head
+Jab Body, Rear Hook Head
+Jab Head, Jab Body, Cross
+Jab, Lead Uppercut
+Jab, Rear Uppercut
+Lead Uppercut, Jab
+Cross, Lead Hook
+Cross Body, Lead Hook Head
+Cross Head, Lead Hook Body
+Double Lead Hook
+Double Rear Hook, Low to High
+Lead Hook, Lead Uppercut
+Lead Hook, Cross Body
+Rear Uppercut, Lead Hook
+Lead Uppercut, Rear Hook
+Lead Uppercut, Rear Uppercut
+Rear Uppercut, Lead Hook
+Rear Uppercut, Cross
+Rear Uppercut, Jab
+Lead Hook, Rear Hook
+Lead Hook, Rear Uppercut
+Rear Hook, Rear Uppercut
+Rear Uppercut, Rear Hook
+Triple Jab
+Jab, Lead Hook, Lead Uppercut
+Jab, Lead Uppercut, Lead Hook
+Jab, Jab, Cross
+Jab Head, Jab Body, Lead Hook Head
+Jab, Cross, Lead Hook
+Jab, Cross, Lead Uppercut
+Jab, Lead Hook, Rear Hook
+Cross, Lead Hook, Cross
+Lead Hook, Cross, Lead Hook
+Lead Hook, Lead Uppercut, Cross
+Lead Hook, Lead Uppercut, Rear Hook
+Lead Hook Body, Lead Hook Head, Rear Uppercut
+Jab, Cross Body, Lead Hook Head
+Jab, Cross, Jab
+Jab, Rear Uppercut, Lead Hook
+Jab, Lead Hook, Cross
+Jab, Lead Hook, Rear Uppercut
+Jab, Lead Hook Body, Lead Hook Head
+Jab, Lead Uppercut, Rear Hook
+Lead Uppercut, Rear Hook, Lead Hook
+Jab, Cross, Lead Hook Body, Rear Uppercut
+Cross, Lead Hook, Cross, Lead Hook Body
+Cross, Lead Hook, Cross Body, Lead Uppercut
+Jab, Lead Hook, Cross, Lead Hook
+Jab, Lead Hook Body, Lead Hook Head, Rear Uppercut
+Jab, Cross Body, Lead Hook, Rear Hook Body
+Lead Hook, Rear Hook, Lead Uppercut, Rear Uppercut
+Lead Uppercut, Lead Hook, Rear Uppercut, Rear Hook
+Lead Hook, Lead Uppercut, Rear Hook, Rear Uppercut
+Lead Hook, Rear Uppercut, Lead Uppercut, Rear Hook
+Jab, Cross, Lead Uppercut, Cross, Lead Hook
+Lead Hook, Cross, Lead Uppercut, Rear Hook, Lead Hook Body
+Jab, Jab, Cross, Lead Hook, Cross
+Jab, Cross, Lead Hook, Cross, Lead Uppercut, Rear Uppercut
+Jab, Cross, Lead Uppercut, Cross, Lead Hook, Rear Uppercut
+Jab, Rear Elbow
+Cross, Lead Elbow
+Cross Body, Lead Upward Elbow
+Lead Hook, Rear Elbow
+Jab, Lead Elbow
+Jab, Cross, Lead Elbow
+Jab, Lead Elbow, Rear Elbow
+Cross, Lead Hook, Rear Elbow
+Cross, Rear Elbow, Cross
+Jab, Cross, Lead Upward Elbow
+Cross, Lead Upward Elbow, Rear Elbow
+Rear Uppercut, Lead Hook, Rear Elbow
+Cross, Lead Hook Body, Rear Elbow
+Lead Hook Body, Rear Elbow, Lead Upward Elbow
+Double Jab
+Jab, Cross
+Jab, Lead Short Uppercut
+Jab, Rear Short Uppercut
+Cross, Lead Overhand
+Cross to Belly, Lead Overhand
+Jab, Lead Cut Elbow
+Jab, Lead Spear Elbow
+Jab, Lead Straight Knee
+Jab, Lead Kick
+Jab, Lead Teep
+Two Jabs, Cross
+Jab, Lead Short Uppercut, Cross
+Jab, Cross, Lead Overhand
+Jab, Rear Short Uppercut, Lead Overhand
+Jab, Kick, Cross
+Jab, Cross, Low Cut Kick
+Jab, Rear Low Cut Kick, Lead High Kick
+Jab, Rear Teep, Lead Teep
+Jab, Cross to Belly, Lead Overhand, Rear Low Kick
+Jab, Lead Short Uppercut, Cross, Lead High Kick
+Jab, Rear Short Uppercut, Lead Overhand, Rear Low Cut Kick
+Jab, Lead Spear Elbow, Rear Up Elbow, Lead Cut Elbow
+Jab, Rear Up Elbow, Lead Cut Elbow, Rear Downward Elbow
+Jab, Lead Spear Elbow, Rear Downward Elbow, Lead Straight Knee
+Jab, Cross, Lead Overhand, Rear Low Kick, Lead High Kick
+Jab, Lead Spear Elbow, Rear Up Elbow, Lead Cut Elbow, Rear Downward Elbow
+Jab, Rear Up Elbow, Lead Cut Elbow, Rear Downward Elbow, Lead Straight Knee
+Jab, Lead Spear Elbow, Rear Up Elbow, Lead Cut Elbow, Rear Downward Elbow, Lead Straight Knee
+Jab, Rear Up Elbow, Lead Cut Elbow, Rear Downward Elbow, Lead Straight Knee, Rear High Kick
+Left Jab, Right Jab, Left Jab, Left Side Elbow
+Left Jab, Left Jab, Right Body Hook, Left Hook
+Left Jab, Right Body Hook, Left Jab, Right Face Hook
+Left Jab, Right Hook, Left Body Hook, Right Body Hook
+Left Jab, Right Cross, Right Hook
+Left Jab, Left Hook, Left Jab, Right Side Elbow
+Left Jab, Right Body Hook, Right Hook, Right Elbow
+Left Side Elbow, Right Spinning Elbow
+Left Front Kick, Right Round Kick
+Left Knee, Right Knee
+Left Side Kick, Right Knee, Left Knee
+Left Knee, Right Knee
+Right Knee, Right Knee, Left Knee
+Right Round Kick, Left Side Kick, Right Front Kick
+Left Front Kick, Right Front Kick, Left Front Kick, Right Round Kick
+Right Front Kick, Left Front Kick, Left Knee, Right Knee
+Right Knee, Left Front Kick, Right Knee
+Left Round Kick, Right Knee, Right Knee, Right Knee
+Left Jab, Right Jab, Left Hook, Right Round Kick
+Left Jab, Left Jab, Right Knee
+Left Front Kick, Right Knee
+Left Jab, Left Front Kick, Right Round Kick
+Left Jab, Right Jab, Left Overhand Elbow, Right Knee
+Left Jab, Right Knee, Left Knee, Left Elbow
+Left Jab, Left Elbow, Right Knee
+Right Front Kick, Left Knee, Left Slashing Elbow, Right Side Elbow
+Left Front Kick, Right Round Kick, Left Jab, Right Cross, Left Hook, Right Hook, Left Elbow, Left Spinning Elbow
+Jab, Cross, Lead Hook
+Lead Uppercut, Cross, Lead Hook
+Lead Hook, Cross, Lead Hook
+Jab, Cross, Uppercut
+Jab, Overhand, Uppercut
+Lead Elbow, Rear Elbow, Round Elbow
+Upward Elbow, Rear Elbow, Round Elbow
+Round Elbow, Rear Elbow, Round Elbow
+Lead Elbow, Rear Elbow, Upward Elbow
+Lead Elbow, Diagonal Elbow, Upward Elbow
+Jab, Cross, Lead Round Elbow
+Upward Elbow, Cross, Lead Hook
+Lead Hook, Cross, Lead Round Elbow
+Overhand, Uppercut, Diagonal Elbow
+Jab, Cross, Lead Upward Elbow
+Jab, Slip Inside, Lead Uppercut, Cross, Lead Hook
+Jab to Head, Rear Straight to Body, Lead Hook to Head
+Catch First Jab, Slip Second Jab, Rear Straight, Lead Hook
+Double Jab Forward, Slip Inside, Pivot Out, Lead Uppercut, Lead Hook, Cross
+Jab, Pull Back, Rear Straight, Lead Hook
+One-Two, Side-Step to Power Side, Cross, Lead Hook with Pivot, Cross
+Double Jab Forward, Slip, Lead Hook, Cross, Roll Out
+One-Two, Step Back, Rear Uppercut, Pivot, Cross, Lead Hook
+Jab Feint, Step-In Lead Hook, Cross
+Bounce-In Jab, Bounce-Out, Repeat Jab Rhythm
+Jab, Pin Jab, Cross, Roll-and-Step, Lead Body Hook
+Rear Uppercut, Lead Hook, Slip; Lead Hook, Cross, Lead Hook, Slip; Lead Body Hook, Lead Head Hook, Cross, Slip
+One-Two; Double Jab-Cross; Four Straight Punches; Double Jab-Cross
+One-Two-Lead Hook, Lead Body Hook, Roll; Rear Uppercut, Lead Uppercut, Rear Uppercut; Lead Hook, Cross, Lead Hook
+Jab, Step Back, One-Two
+Cross, Lead Hook
+Lead Hook, Roundhouse Kick
+Jab, Cross
+Roundhouse Kick, Spinning Back Kick
+Overhand or Chopping Cross, Uppercut
+Lead Hook, Spinning Backfist
+Shifting Cross, Roundhouse Kick
+Cross, Shuffling Hook or Gazelle Punch
+Slip Left, Lead Hook Counter
+Slip Left while Throwing Rear Cross or Rear Hook
+Slip Right, Rear Cross or Rear Hook
+Slip Right while Throwing Lead Hook
+Duck, Uppercut
+Duck while Throwing Body Jab, Body Cross or Overhand
+Shoulder Roll, Spinning Back Kick
+Shoulder Roll, Cross
+Shoulder Roll while Throwing Lead Hook
+Step Left while Throwing Rear Roundhouse Kick
+Pull Back, Rear Cross
+Jab, Cross
+Jab, Jab, Cross
+Jab, Cross, Lead Hook
+Jab, Cross, Lead Hook, Cross
+Jab, Cross, Lead Uppercut, Cross
+Jab, Rear Uppercut, Lead Hook, Cross
+Cross, Lead Hook, Cross
+Southpaw Jab, Cross, Hook to Liver, Left Low Kick, Push Kick
+Jab, Right Low Kick
+Jab, Cross, Left Low Kick
+Jab, Cross, Hook, Right Low Kick
+Lead Hook Outside Thigh, Lead Hammerfist Inside Thigh
+Rear Hook Outside Thigh, Rear Hammerfist Inside Thigh
+Lead Hammerfist Inside Thigh, Lead Hook Outside Thigh
+Rear Hammerfist Inside Thigh, Rear Hook Outside Thigh
+Jab, Cross
+Double Jab, Cross
+Jab, Cross, Lead Hook
+Lead Hook, Cross, Lead Hook
+Jab, Lead Uppercut, Cross, Lead Hook
+Jab, Rear Uppercut, Lead Hook
