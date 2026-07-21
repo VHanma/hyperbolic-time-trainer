@@ -1,0 +1,22 @@
+plugins { id "com.android.application" }
+android {
+    namespace "com.vhanma.combocaller"
+    compileSdk 35
+    defaultConfig {
+        applicationId "com.vhanma.combocaller"
+        minSdk 23
+        targetSdk 35
+        versionCode 1
+        versionName "1.0-Pure898"
+    }
+    buildTypes {
+        release {
+            signingConfig signingConfigs.debug
+            minifyEnabled false
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
