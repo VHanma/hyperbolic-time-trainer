@@ -18,21 +18,22 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Reconstruct and verify FREQSIGHT source
+      - name: Prepare and verify direct FREQSIGHT source
         shell: bash
         run: |
           set -euo pipefail
-          cat .freqsight_payload/p* > /tmp/freqsight.b64
-          test "$(wc -c < /tmp/freqsight.b64)" -eq 35756
-          echo "446e7fe39cd1a500fadc948c953f4bab3ecfc841ec1165e902e844048291a45b  /tmp/freqsight.b64" | sha256sum -c -
-          base64 --decode /tmp/freqsight.b64 > /tmp/freqsight.tar.gz
-          echo "4beab8310ba91fbdd5cf195fce299ea2b3e50f82590677010208ef4aade4340a  /tmp/freqsight.tar.gz" | sha256sum -c -
-          tar -xzf /tmp/freqsight.tar.gz
-          test -f freqsight/app/src/main/java/com/vhanma/freqsight/MainActivity.java
-          test -f freqsight/app/src/main/java/com/vhanma/freqsight/FrameAnalyzer.java
-          test -f freqsight/app/src/main/java/com/vhanma/freqsight/EvidenceEngine.java
-          grep -q 'DIFFERENCE_HEAT' freqsight/app/src/main/java/com/vhanma/freqsight/FilterMode.java
+          mkdir -p freqsight/app/src/main/java/com/vhanma/freqsight
+          cat .freqsight_source/MainActivity.part0 .freqsight_source/MainActivity.part1 > freqsight/app/src/main/java/com/vhanma/freqsight/MainActivity.java
+          test -s freqsight/app/src/main/java/com/vhanma/freqsight/MainActivity.java
+          test -s freqsight/app/src/main/java/com/vhanma/freqsight/FrameAnalyzer.java
+          test -s freqsight/app/src/main/java/com/vhanma/freqsight/EvidenceEngine.java
+          test -s freqsight/app/src/main/java/com/vhanma/freqsight/AudioEngine.java
+          test -s freqsight/app/src/main/java/com/vhanma/freqsight/SensorHub.java
+          test -s freqsight/app/src/main/java/com/vhanma/freqsight/BeaconEngine.java
+          test "$(grep -c '^[[:space:]]*[A-Z_]*("' freqsight/app/src/main/java/com/vhanma/freqsight/FilterMode.java)" -eq 25
           grep -q 'SKYWATCHER BEACON' freqsight/app/src/main/java/com/vhanma/freqsight/MainActivity.java
+          grep -q 'NO TRANSLATABLE DATA' freqsight/app/src/main/java/com/vhanma/freqsight/EvidenceEngine.java
+          grep -q 'SCALAR_INSPIRED' freqsight/app/src/main/java/com/vhanma/freqsight/BeaconEngine.java
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -78,7 +79,7 @@ jobs:
           "$BUILD_TOOLS/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
           unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
           sha256sum "$APK" > dist/FREQSIGHT-v1.0-SHA256.txt
-          zip -qr dist/FREQSIGHT-v1.0-Source.zip freqsight
+          zip -qr dist/FREQSIGHT-v1.0-Source.zip freqsight .freqsight_source
           cat > dist/BUILD-REPORT.txt <<'REPORT'
           FREQSIGHT v1.0
           Package: com.vhanma.freqsight
@@ -90,7 +91,7 @@ jobs:
           Audio: microphone FFT plus optional limited tone and sweep generator
           Beacon: Prime, Fibonacci, Sweep, Silent, Mirror and Scalar-Inspired Simulation
           Translation: deterministic and evidence-bound, with no generated dialogue
-          Runtime permissions: camera and microphone
+          Runtime permissions: camera, microphone and vibration
           REPORT
 
       - name: Upload final APK package
