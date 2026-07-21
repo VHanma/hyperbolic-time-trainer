@@ -1,0 +1,100 @@
+name: Build FREQSIGHT APK
+
+on:
+  push:
+    branches: [ freqsight-installation ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Reconstruct and verify FREQSIGHT source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .freqsight_payload/p* > /tmp/freqsight.b64
+          test "$(wc -c < /tmp/freqsight.b64)" -eq 35756
+          echo "446e7fe39cd1a500fadc948c953f4bab3ecfc841ec1165e902e844048291a45b  /tmp/freqsight.b64" | sha256sum -c -
+          base64 --decode /tmp/freqsight.b64 > /tmp/freqsight.tar.gz
+          echo "4beab8310ba91fbdd5cf195fce299ea2b3e50f82590677010208ef4aade4340a  /tmp/freqsight.tar.gz" | sha256sum -c -
+          tar -xzf /tmp/freqsight.tar.gz
+          test -f freqsight/app/src/main/java/com/vhanma/freqsight/MainActivity.java
+          test -f freqsight/app/src/main/java/com/vhanma/freqsight/FrameAnalyzer.java
+          test -f freqsight/app/src/main/java/com/vhanma/freqsight/EvidenceEngine.java
+          grep -q 'DIFFERENCE_HEAT' freqsight/app/src/main/java/com/vhanma/freqsight/FilterMode.java
+          grep -q 'SKYWATCHER BEACON' freqsight/app/src/main/java/com/vhanma/freqsight/MainActivity.java
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.9
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          cd freqsight
+          /tmp/gradle-dist/gradle-8.9/bin/gradle wrapper --gradle-version 8.9
+          chmod +x gradlew
+
+      - name: Build release APK
+        shell: bash
+        run: |
+          set -o pipefail
+          cd freqsight
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/freqsight-build.log
+
+      - name: Upload compiler diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: freqsight-build-log
+          path: /tmp/freqsight-build.log
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Verify and package downloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK=dist/FREQSIGHT-v1.0.apk
+          cp freqsight/app/build/outputs/apk/release/app-release.apk "$APK"
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BUILD_TOOLS/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
+          unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
+          sha256sum "$APK" > dist/FREQSIGHT-v1.0-SHA256.txt
+          zip -qr dist/FREQSIGHT-v1.0-Source.zip freqsight
+          cat > dist/BUILD-REPORT.txt <<'REPORT'
+          FREQSIGHT v1.0
+          Package: com.vhanma.freqsight
+          Purpose: fictional stationary environmental signal-to-language recorder
+          Filters: 25
+          Camera: CameraX preview, frame analysis and video recording
+          OCR: bundled on-device ML Kit text recognition
+          Sensors: magnetometer, accelerometer, gyroscope and ambient light
+          Audio: microphone FFT plus optional limited tone and sweep generator
+          Beacon: Prime, Fibonacci, Sweep, Silent, Mirror and Scalar-Inspired Simulation
+          Translation: deterministic and evidence-bound, with no generated dialogue
+          Runtime permissions: camera and microphone
+          REPORT
+
+      - name: Upload final APK package
+        uses: actions/upload-artifact@v4
+        with:
+          name: freqsight-v1-final
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
