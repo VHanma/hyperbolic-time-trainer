@@ -1,0 +1,98 @@
+name: Build Pure Hanma Combo Caller APK
+
+on:
+  push:
+    branches: [ pure-combo-caller-final ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Verify and assemble 898-combo catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat pure-caller/app/src/main/assets/combos_*.tsv > pure-caller/app/src/main/assets/combos.tsv
+          COUNT=$(wc -l < pure-caller/app/src/main/assets/combos.tsv)
+          test "$COUNT" -eq 898
+          FIRST=$(head -1 pure-caller/app/src/main/assets/combos.tsv | cut -f1)
+          LAST=$(tail -1 pure-caller/app/src/main/assets/combos.tsv | cut -f1)
+          test "$FIRST" = "1"
+          test "$LAST" = "898"
+          awk -F '\t' 'NF < 2 || $1 != NR { print "Catalog error at line " NR; exit 1 }' pure-caller/app/src/main/assets/combos.tsv
+          echo "Verified $COUNT exact combinations"
+
+      - name: Build release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd pure-caller
+          gradle --no-daemon clean assembleRelease
+
+      - name: Verify APK and package downloads
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK_IN=pure-caller/app/build/outputs/apk/release/app-release.apk
+          APK_OUT=dist/Hanma-Combo-Caller-Pure898-OneClick.apk
+          cp "$APK_IN" "$APK_OUT"
+          BUILD_TOOLS=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK_OUT" | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BUILD_TOOLS/aapt" dump badging "$APK_OUT" | tee dist/APK-BADGING-REPORT.txt
+          "$BUILD_TOOLS/aapt" dump permissions "$APK_OUT" | tee dist/APK-PERMISSIONS-REPORT.txt
+          unzip -t "$APK_OUT" >/dev/null
+          if grep -Eq 'android.permission.(CAMERA|INTERNET|RECORD_AUDIO|ACCESS_NETWORK_STATE)' dist/APK-PERMISSIONS-REPORT.txt; then
+            echo "Forbidden camera, network, or microphone permission detected"
+            exit 1
+          fi
+          grep -q "package: name='com.vhanma.combocaller'" dist/APK-BADGING-REPORT.txt
+          grep -q 'android.permission.VIBRATE' dist/APK-PERMISSIONS-REPORT.txt
+          sha256sum "$APK_OUT" | tee dist/Hanma-Combo-Caller-Pure898-SHA256.txt
+          cat > dist/BUILD-REPORT.txt <<'REPORT'
+          HANMA COMBO CALLER PURE 898
+          Package: com.vhanma.combocaller
+          Version: 1.0-Pure898
+          Catalog: 898 exact combinations
+          Modes: random, sequential, shuffle once
+          Banks: all, coded 1-400, named 401-898
+          Repeats: 1, 2, 3, 5, 10, 20, or random 2-5
+          Rounds: 1, 2, 3, 5, 10, 20 minutes, or unlimited
+          Controls: repeat, next, pause/resume, stop
+          Voice: expanded movement names or exact coded calls
+          Permissions: vibration only
+          Camera: absent
+          Video analysis: absent
+          Microphone: absent
+          Internet: absent
+          REPORT
+          zip -qr dist/Hanma-Combo-Caller-Pure898-Source.zip pure-caller
+
+      - name: Upload one-click APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-combo-caller-pure898-one-click
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
