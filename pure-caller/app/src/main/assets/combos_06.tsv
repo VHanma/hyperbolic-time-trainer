@@ -1,0 +1,100 @@
+601	Jab, Cross, Uppercut, Cross, Elbow
+602	Jab, Cross, Uppercut, Hook, Cross
+603	Jab, Cross, Uppercut, Hook, Hook
+604	Jab, Cross, Uppercut, Hook, Uppercut
+605	Jab, Cross, Uppercut, Hook, Overhand
+606	Jab, Cross, Uppercut, Hook, Elbow
+607	Jab, Cross, Uppercut, Uppercut, Cross
+608	Jab, Cross, Uppercut, Uppercut, Hook
+609	Jab, Cross, Uppercut, Uppercut, Uppercut
+610	Jab, Cross, Uppercut, Uppercut, Overhand
+611	Jab, Cross, Uppercut, Uppercut, Elbow
+612	Jab, Cross, Uppercut, Overhand, Cross
+613	Jab, Cross, Uppercut, Overhand, Hook
+614	Jab, Cross, Uppercut, Overhand, Uppercut
+615	Jab, Cross, Uppercut, Overhand, Overhand
+616	Jab, Cross, Uppercut, Overhand, Elbow
+617	Jab, Cross, Uppercut, Elbow, Cross
+618	Jab, Cross, Uppercut, Elbow, Hook
+619	Jab, Cross, Uppercut, Elbow, Uppercut
+620	Jab, Cross, Uppercut, Elbow, Overhand
+621	Jab, Cross, Uppercut, Elbow, Elbow
+622	Jab, Cross, Overhand, Cross, Cross
+623	Jab, Cross, Overhand, Cross, Hook
+624	Jab, Cross, Overhand, Cross, Uppercut
+625	Jab, Cross, Overhand, Cross, Overhand
+626	Jab, Cross, Overhand, Cross, Elbow
+627	Jab, Cross, Overhand, Hook, Cross
+628	Jab, Cross, Overhand, Hook, Hook
+629	Jab, Cross, Overhand, Hook, Uppercut
+630	Jab, Cross, Overhand, Hook, Overhand
+631	Jab, Cross, Overhand, Hook, Elbow
+632	Jab, Cross, Overhand, Uppercut, Cross
+633	Jab, Cross, Overhand, Uppercut, Hook
+634	Jab, Cross, Overhand, Uppercut, Uppercut
+635	Jab, Cross, Overhand, Uppercut, Overhand
+636	Jab, Cross, Overhand, Uppercut, Elbow
+637	Jab, Cross, Overhand, Overhand, Cross
+638	Jab, Cross, Overhand, Overhand, Hook
+639	Jab, Cross, Overhand, Overhand, Uppercut
+640	Jab, Cross, Overhand, Overhand, Overhand
+641	Jab, Cross, Overhand, Overhand, Elbow
+642	Jab, Cross, Overhand, Elbow, Cross
+643	Jab, Cross, Overhand, Elbow, Hook
+644	Jab, Cross, Overhand, Elbow, Uppercut
+645	Jab, Cross, Overhand, Elbow, Overhand
+646	Jab, Cross, Overhand, Elbow, Elbow
+647	Jab, Cross, Elbow, Cross, Cross
+648	Jab, Cross, Elbow, Cross, Hook
+649	Jab, Cross, Elbow, Cross, Uppercut
+650	Jab, Cross, Elbow, Cross, Overhand
+651	Jab, Cross, Elbow, Cross, Elbow
+652	Jab, Cross, Elbow, Hook, Cross
+653	Jab, Cross, Elbow, Hook, Hook
+654	Jab, Cross, Elbow, Hook, Uppercut
+655	Jab, Cross, Elbow, Hook, Overhand
+656	Jab, Cross, Elbow, Hook, Elbow
+657	Jab, Cross, Elbow, Uppercut, Cross
+658	Jab, Cross, Elbow, Uppercut, Hook
+659	Jab, Cross, Elbow, Uppercut, Uppercut
+660	Jab, Cross, Elbow, Uppercut, Overhand
+661	Jab, Cross, Elbow, Uppercut, Elbow
+662	Jab, Cross, Elbow, Overhand, Cross
+663	Jab, Cross, Elbow, Overhand, Hook
+664	Jab, Cross, Elbow, Overhand, Uppercut
+665	Jab, Cross, Elbow, Overhand, Overhand
+666	Jab, Cross, Elbow, Overhand, Elbow
+667	Jab, Cross, Elbow, Elbow, Cross
+668	Jab, Cross, Elbow, Elbow, Hook
+669	Jab, Cross, Elbow, Elbow, Uppercut
+670	Jab, Cross, Elbow, Elbow, Overhand
+671	Jab, Cross, Elbow, Elbow, Elbow
+672	Jab, Jab
+673	Jab, Hook
+674	Jab, Uppercut
+675	Jab, Overhand
+676	Jab, Elbow
+677	Jab, Cross
+678	Fake Jab, Jab
+679	Jab, Fake Jab
+680	Fake Jab, Hook
+681	Jab, Fake Hook
+682	Fake Jab, Uppercut
+683	Jab, Fake Uppercut
+684	Fake Jab, Overhand
+685	Jab, Fake Overhand
+686	Fake Jab, Elbow
+687	Jab, Fake Elbow
+688	Fake Jab, Cross
+689	Jab, Fake Cross
+690	Double jab
+691	Jab head, Jab body
+692	Jab body, Jab head
+693	Double jab body
+694	Jab, Cross
+695	Jab head, Cross body
+696	Jab body, Cross head
+697	Jab body, Cross body
+698	Jab, Lead hook
+699	Jab body, Lead hook head
+700	Jab body, Rear hook head
