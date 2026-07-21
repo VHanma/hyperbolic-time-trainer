@@ -2,7 +2,7 @@ name: Build Pure Combo Caller APK
 
 on:
   push:
-    branches: [ pure-combo-caller ]
+    branches: [ master, pure-combo-caller ]
   pull_request:
     branches: [ master ]
   workflow_dispatch:
