@@ -1,0 +1,1 @@
+Build FREQSIGHT v1.0 with 25-filter observation pipeline.
