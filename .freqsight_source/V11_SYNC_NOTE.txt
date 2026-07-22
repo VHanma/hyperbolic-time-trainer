@@ -1,0 +1,1 @@
+Sync stronger beacon, 42 filters, orientation support, swipe navigation, and raw-view X into clean compiler branch.
