@@ -1,7 +1,7 @@
     private void calibrate(){
         if(!sensors.isStable()){status("Phone movement detected. Stabilize the installation before calibration.");return;}
         sessionActive=true;logger.startSession();
-        sensors.beginBaseline();audio.beginBaseline();analyzer.beginCalibration(150);
+        sensors.beginBaseline();audio.beginBaseline();analyzer.beginCalibration(180);
         ocrEnabled=false;glyphEnabled=false;analyzer.setGlyphMode(false);
         status("Calibrating baseline: camera, smoke drift, reflections, shadows, audio and sensors…");
         evidenceView.setText("NO TRANSLATABLE DATA.");
@@ -16,11 +16,11 @@
 
     private void toggleGlyph(){glyphEnabled=!glyphEnabled;analyzer.setGlyphMode(glyphEnabled);if(glyphEnabled)setFilter(FilterMode.GLYPH_EDGE);status(glyphEnabled?"EM Glyph Capture armed. Camera image remains primary evidence.":"EM Glyph Capture off.");}
     private void toggleOcr(){ocrEnabled=!ocrEnabled;status(ocrEnabled?"Live OCR armed for repeated text-like marks.":"Live OCR off.");}
-    private void setFilter(FilterMode f){analyzer.setFilter(f);modeView.setText(f.label.toUpperCase(Locale.US));processedView.setVisibility(f==FilterMode.RAW?View.GONE:View.VISIBLE);}
+    private void setFilter(FilterMode f){analyzer.setFilter(f);if(modeView!=null)modeView.setText(f.label.toUpperCase(Locale.US)+"  •  SWIPE FILTERS");if(processedView!=null)processedView.setVisibility(f==FilterMode.RAW?View.GONE:View.VISIBLE);updateRawButton();}
 
     private void showFilterDialog(){
         FilterMode[] modes=FilterMode.values();String[] labels=new String[modes.length];for(int i=0;i<modes.length;i++)labels[i]=modes[i].label;
-        new AlertDialog.Builder(this).setTitle("Observation filters").setItems(labels,(d,w)->setFilter(modes[w])).setNegativeButton("CLOSE",null).show();
+        new AlertDialog.Builder(this).setTitle("Observation filters • swipe camera to cycle").setItems(labels,(d,w)->setFilter(modes[w])).setNegativeButton("CLOSE",null).show();
     }
 
     private void showFrequencyDialog(){
@@ -30,7 +30,7 @@
         Spinner duration=spinner(new String[]{"250 ms","500 ms","1 second","3 seconds","5 seconds"});addField(p,"DURATION",duration);
         CheckBox sweep=new CheckBox(this);sweep.setText("Frequency sweep");sweep.setTextColor(Color.WHITE);p.addView(sweep);
         CheckBox ultrasonic=new CheckBox(this);ultrasonic.setText("Ultrasonic-style attempt (device-limited simulation)");ultrasonic.setTextColor(Color.WHITE);p.addView(ultrasonic);
-        new AlertDialog.Builder(this).setTitle("Safe calibration emission").setView(p).setPositiveButton("EMIT",(d,w)->{
+        new AlertDialog.Builder(this).setTitle("Calibration emission").setView(p).setPositiveButton("EMIT",(d,w)->{
             double start=parse(hz.getText().toString(),1000);double finish=parse(end.getText().toString(),12000);int ms=parseDurationLabel(String.valueOf(duration.getSelectedItem()));
             if(ultrasonic.isChecked()){start=Math.max(16000,start);finish=Math.min(19500,Math.max(start,finish));status(audio.supportsUltrasonicStyle()?"Ultrasonic-style high-tone attempt. Acoustic output remains device-dependent.":"Ultrasonic-style output simulated: device sample rate insufficient.");}
             if(sweep.isChecked())audio.playSweep(start,finish,ms,0.08f);else audio.playTone(Math.min(19500,start),ms,0.08f,true,true);
@@ -42,15 +42,24 @@
         String[] names=new String[BeaconEngine.Pattern.values().length];for(int i=0;i<names.length;i++)names[i]=BeaconEngine.Pattern.values()[i].label;
         Spinner pattern=spinner(names);addField(p,"PATTERN",pattern);
         EditText hz=numberField("12000",p,"Base frequency Hz");
-        Spinner unit=spinner(new String[]{"250 ms unit","500 ms unit","750 ms unit","1000 ms unit"});addField(p,"TIMING UNIT",unit);
+        Spinner unit=spinner(new String[]{"200 ms unit","350 ms unit","500 ms unit","750 ms unit","1000 ms unit"});addField(p,"TIMING UNIT",unit);
+        Spinner density=spinner(new String[]{"1 • structured","2 • dense","3 • layered","4 • maximum coded"});density.setSelection(2);addField(p,"PATTERN DENSITY",density);
+        Spinner cycles=spinner(new String[]{"1 cycle","2 cycles","3 cycles","5 cycles"});cycles.setSelection(1);addField(p,"CYCLES",cycles);
+        Spinner response=spinner(new String[]{"30 seconds","60 seconds","120 seconds","180 seconds"});response.setSelection(1);addField(p,"PASSIVE RESPONSE WINDOW",response);
         CheckBox audioOn=new CheckBox(this);audioOn.setText("Audio output");audioOn.setChecked(true);audioOn.setTextColor(Color.WHITE);p.addView(audioOn);
         CheckBox visualOnly=new CheckBox(this);visualOnly.setText("Visual-only simulation");visualOnly.setTextColor(Color.WHITE);p.addView(visualOnly);
-        TextView rule=text("The beacon does not speak for them. It only knocks. The chamber must answer.",12,CYAN,true);rule.setPadding(0,10,0,0);p.addView(rule);
+        CheckBox stereo=new CheckBox(this);stereo.setText("Alternating stereo weave");stereo.setChecked(true);stereo.setTextColor(Color.WHITE);p.addView(stereo);
+        TextView note=text("Stronger means denser mathematical structure, layered harmonics, repeated cycles and longer listening windows. Output remains capped by the phone.",11,MUTED,false);note.setPadding(0,8,0,4);p.addView(note);
+        TextView rule=text("The beacon does not speak for them. It only knocks. The chamber must answer.",12,CYAN,true);rule.setPadding(0,8,0,0);p.addView(rule);
         new AlertDialog.Builder(this).setTitle("SKYWATCHER BEACON").setView(p).setPositiveButton("ARM AND EMIT",(d,w)->{
             if(!analyzer.isBaselineReady()){status("Beacon requires a completed baseline.");return;}
-            int unitMs=new int[]{250,500,750,1000}[unit.getSelectedItemPosition()];
+            int unitMs=new int[]{200,350,500,750,1000}[unit.getSelectedItemPosition()];
+            int strength=density.getSelectedItemPosition()+1;
+            int repeatCount=new int[]{1,2,3,5}[cycles.getSelectedItemPosition()];
+            int responseMs=new int[]{30000,60000,120000,180000}[response.getSelectedItemPosition()];
             double base=Math.min(19500,Math.max(100,parse(hz.getText().toString(),12000)));
-            beacon.start(BeaconEngine.Pattern.values()[pattern.getSelectedItemPosition()],base,audioOn.isChecked(),visualOnly.isChecked(),unitMs);
+            environmentalEventTimes.clear();
+            beacon.start(BeaconEngine.Pattern.values()[pattern.getSelectedItemPosition()],base,audioOn.isChecked(),visualOnly.isChecked(),unitMs,strength,repeatCount,stereo.isChecked(),responseMs);
         }).setNeutralButton("STOP",(d,w)->beacon.stop()).setNegativeButton("CANCEL",null).show();
     }
 
@@ -64,26 +73,27 @@
         MediaStoreOutputOptions options=new MediaStoreOutputOptions.Builder(getContentResolver(),MediaStore.Video.Media.EXTERNAL_CONTENT_URI).setContentValues(values).build();
         PendingRecording pending=videoCapture.getOutput().prepareRecording(this,options).withAudioEnabled();
         recording=pending.start(ContextCompat.getMainExecutor(this),event->{
-            if(event instanceof VideoRecordEvent.Start){recordingView.setText("● RECORDING");status("Recording video, audio and timestamped sensor stream.");}
-            else if(event instanceof VideoRecordEvent.Finalize f){recordingView.setText("");recording=null;status(f.hasError()?"Recording error: "+f.getError():"Recording saved: "+f.getOutputResults().getOutputUri());}
+            if(event instanceof VideoRecordEvent.Start){if(recordingView!=null)recordingView.setText("● RECORDING");status("Recording video, audio and timestamped sensor stream.");}
+            else if(event instanceof VideoRecordEvent.Finalize f){if(recordingView!=null)recordingView.setText("");recording=null;status(f.hasError()?"Recording error: "+f.getError():"Recording saved: "+f.getOutputResults().getOutputUri());}
         });
     }
-    private void stopRecording(){if(recording!=null){recording.stop();recording=null;}recordingView.setText("");}
+    private void stopRecording(){if(recording!=null){recording.stop();recording=null;}if(recordingView!=null)recordingView.setText("");}
 
     private void exportTranscript(){ioExecutor.execute(()->{Uri uri=logger.exportZip();runOnUiThread(()->status(uri==null?"Export failed.":"Evidence package exported to Downloads/FREQSIGHT."));});}
 
     @Override public void onCalibrationProgress(int current,int total){runOnUiThread(()->status("Calibrating baseline… "+current+" / "+total));}
     @Override public void onCalibrationComplete(){runOnUiThread(()->{sensors.completeBaseline();audio.completeBaseline();if(camera!=null)cameraLock.lock(camera);status("Baseline complete. Listening for difference.");});}
+    @Override public void onOrientationChanged(boolean portrait){runOnUiThread(()->status("Analysis grid changed to "+(portrait?"portrait":"landscape")+". Recalibrate before live watch."));}
 
     @Override public void onFrame(Bitmap bitmap,DataModels.VisualEvent m,FilterMode mode){runOnUiThread(()->{
-        latestVisual=m;if(mode!=FilterMode.RAW)processedView.setImageBitmap(bitmap);
-        metricsView.setText(String.format(Locale.US,"frame %d | difference %.2f | smoke %.2f | shadow %.2f | reflection %.2f | condensation %.2f | region %s\n%s\n%s",
+        latestVisual=m;if(mode!=FilterMode.RAW&&processedView!=null)processedView.setImageBitmap(bitmap);
+        if(metricsView!=null)metricsView.setText(String.format(Locale.US,"frame %d | difference %.2f | smoke %.2f | shadow %.2f | reflection %.2f | condensation %.2f | region %s\n%s\n%s",
                 m.frameNumber,m.differenceScore,m.smokeScore,m.shadowScore,m.reflectionScore,m.condensationScore,m.region(),latestSensor.compact(),latestAudio.compact()));
     });}
 
     @Override public void onVisualEvent(DataModels.VisualEvent event){
-        environmentalEventTimes.add(event.timestampMs);while(environmentalEventTimes.size()>60)environmentalEventTimes.remove(0);
-        if(ocrEnabled && event.rawFrame!=null && System.currentTimeMillis()-lastOcrMs>700){
+        environmentalEventTimes.add(event.timestampMs);while(environmentalEventTimes.size()>80)environmentalEventTimes.remove(0);
+        if(ocrEnabled&&event.rawFrame!=null&&System.currentTimeMillis()-lastOcrMs>700){
             lastOcrMs=System.currentTimeMillis();InputImage image=InputImage.fromBitmap(event.rawFrame,0);
             textRecognizer.process(image).addOnSuccessListener(result->{event.rawOcr=result.getText();renderEvidence(event);}).addOnFailureListener(e->renderEvidence(event));
         }else renderEvidence(event);
@@ -93,30 +103,39 @@
         String mirror=beaconMatch();
         DataModels.EvidenceEvent rendered=evidence.render(event,latestSensor,latestAudio,!"passive".equals(beaconState),mirror);
         logger.logEvidence(rendered,event);
-        runOnUiThread(()->evidenceView.setText(rendered.englishRendering+"\nRaw: "+rendered.rawPattern+"\nConfidence: "+rendered.confidence+"%\nAlternate: "+rendered.alternateRendering));
+        runOnUiThread(()->{if(evidenceView!=null)evidenceView.setText(rendered.englishRendering+"\nRaw: "+rendered.rawPattern+"\nConfidence: "+rendered.confidence+"%\nAlternate: "+rendered.alternateRendering);});
     }
 
     private String beaconMatch(){
-        List<Long> emitted=beacon.emittedTimes();if(emitted.size()<2||environmentalEventTimes.size()<2)return "";
-        int matches=0;int compared=0;
-        for(int i=1;i<emitted.size();i++){
-            long target=emitted.get(i)-emitted.get(i-1);long best=Long.MAX_VALUE;
-            for(int j=1;j<environmentalEventTimes.size();j++){long interval=environmentalEventTimes.get(j)-environmentalEventTimes.get(j-1);best=Math.min(best,Math.abs(interval-target));}
-            compared++;if(best<180)matches++;
-        }
-        if(compared>=2&&matches>=Math.max(2,compared/2))return "response resembles emitted timing pattern";
+        List<Long> emitted=beacon.emittedTimes();
+        if(emitted.size()<3||environmentalEventTimes.size()<3)return "";
+        List<Long> eIntervals=intervals(emitted);List<Long> rIntervals=intervals(environmentalEventTimes);
+        if(eIntervals.size()<2||rIntervals.size()<2)return "";
+        float direct=bestIntervalScore(eIntervals,rIntervals,false);float mirror=bestIntervalScore(eIntervals,rIntervals,true);float score=Math.max(direct,mirror);
+        if(score>=0.72f)return String.format(Locale.US,"environmental timing resembles emitted pattern at %.0f%% interval agreement",score*100f);
+        if(score>=0.55f)return String.format(Locale.US,"partial timing resemblance at %.0f%% agreement",score*100f);
         return "";
+    }
+
+    private List<Long> intervals(List<Long> times){List<Long> out=new ArrayList<>();for(int i=1;i<times.size();i++){long d=times.get(i)-times.get(i-1);if(d>80&&d<30000)out.add(d);}return out;}
+    private float bestIntervalScore(List<Long> emitted,List<Long> response,boolean reverse){
+        int window=Math.min(emitted.size(),response.size());if(window<2)return 0f;float best=0f;
+        for(int start=0;start<=response.size()-window;start++){
+            double scale=0;for(int i=0;i<window;i++){long e=emitted.get(reverse?window-1-i:i);scale+=response.get(start+i)/(double)Math.max(1,e);}scale/=window;
+            double error=0;for(int i=0;i<window;i++){long e=emitted.get(reverse?window-1-i:i);double expected=e*scale;error+=Math.abs(response.get(start+i)-expected)/Math.max(120.0,expected);}error/=window;
+            best=Math.max(best,(float)Math.max(0,1-error));
+        }
+        return best;
     }
 
     @Override public void onSensorSnapshot(DataModels.SensorSnapshot snapshot){latestSensor=snapshot;if(sessionActive)logger.logSensor(snapshot);}
     @Override public void onAudioSnapshot(DataModels.AudioSnapshot snapshot){latestAudio=snapshot;if(sessionActive&&(snapshot.pulse||snapshot.click||snapshot.repeatedPattern))logger.logAudio(snapshot);}
-    @Override public void onCameraMetadata(String text){runOnUiThread(()->metadataView.setText(text));}
+    @Override public void onCameraMetadata(String text){runOnUiThread(()->{if(metadataView!=null)metadataView.setText(text);});}
     @Override public void onBeaconState(String state){beaconState=state;runOnUiThread(()->status(state));}
     @Override public void onBeaconPulse(BeaconEngine.BeaconPulse pulse){if(!sessionActive){logger.startSession();sessionActive=true;}logger.logBeacon(pulse);}
-    @Override public void onVisualPulse(boolean on){runOnUiThread(()->beaconFlash.setVisibility(on?View.VISIBLE:View.GONE));}
+    @Override public void onVisualPulse(boolean on){runOnUiThread(()->{if(beaconFlash!=null)beaconFlash.setVisibility(on?View.VISIBLE:View.GONE);});}
 
-    private void status(String text){runOnUiThread(()->statusView.setText(text));}
-
+    private void status(String value){runOnUiThread(()->{if(statusView!=null)statusView.setText(value);});}
     private TextView text(String s,int size,int color,boolean bold){TextView v=new TextView(this);v.setText(s);v.setTextSize(size);v.setTextColor(color);if(bold)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}
     private void addButton(LinearLayout parent,String label,View.OnClickListener click){Button b=new Button(this);b.setText(label);b.setTextColor(Color.WHITE);b.setBackgroundColor(0xFF12344A);b.setOnClickListener(click);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(170),dp(64));p.setMargins(dp(3),dp(3),dp(3),dp(3));parent.addView(b,p);}
     private LinearLayout dialogPanel(){LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);p.setPadding(dp(18),dp(8),dp(18),dp(8));p.setBackgroundColor(PANEL);return p;}
