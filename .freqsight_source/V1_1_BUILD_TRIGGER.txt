@@ -1,0 +1,1 @@
+FREQSIGHT v1.1: stronger coded beacon, 42 filters, portrait/landscape, swipe filters, raw-view X.
