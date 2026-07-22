@@ -67,3 +67,72 @@ jobs:
           name: Pure-Combo-Caller-v1.0-Final
           path: output/*
           retention-days: 30
+
+  freqsight:
+    if: startsWith(github.head_ref, 'freqsight')
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble FREQSIGHT MainActivity
+        run: |
+          set -euo pipefail
+          cat .freqsight_source/MainActivity.part0 .freqsight_source/MainActivity.part1 > freqsight/app/src/main/java/com/vhanma/freqsight/MainActivity.java
+          test -s freqsight/app/src/main/java/com/vhanma/freqsight/MainActivity.java
+          grep -q 'class MainActivity' freqsight/app/src/main/java/com/vhanma/freqsight/MainActivity.java
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build FREQSIGHT APK
+        run: |
+          set -o pipefail
+          cd freqsight
+          gradle --no-daemon clean assembleRelease 2>&1 | tee /tmp/freqsight-build.log
+
+      - name: Upload compiler log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: freqsight-build-log
+          path: /tmp/freqsight-build.log
+          retention-days: 7
+
+      - name: Verify and package FREQSIGHT
+        run: |
+          set -euo pipefail
+          mkdir -p freqsight-output
+          APK=freqsight-output/FREQSIGHT-v1.0.apk
+          cp freqsight/app/build/outputs/apk/release/app-release.apk "$APK"
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" > freqsight-output/SIGNATURE.txt
+          "$BUILD_TOOLS/aapt" dump badging "$APK" > freqsight-output/BADGING.txt
+          unzip -t "$APK" | tail -1 > freqsight-output/ARCHIVE.txt
+          sha256sum "$APK" > freqsight-output/FREQSIGHT-v1.0-SHA256.txt
+          cat > freqsight-output/BUILD-REPORT.txt <<'REPORT'
+          FREQSIGHT V1.0
+          Package: com.vhanma.freqsight
+          CameraX stationary analysis and video recording
+          Microphone frequency observation and correlation
+          Magnetometer, accelerometer, gyroscope and light sensor logging
+          ML Kit OCR and symbol-cluster evidence rendering
+          25 visual filters
+          Skywatcher Beacon and scalar-inspired simulation clearly labeled fictional
+          No English output without visible or measurable evidence
+          REPORT
+          (cd freqsight && zip -qr ../freqsight-output/FREQSIGHT-v1.0-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FREQSIGHT-v1.0-OneClick
+          path: freqsight-output/*
+          if-no-files-found: error
+          retention-days: 30
