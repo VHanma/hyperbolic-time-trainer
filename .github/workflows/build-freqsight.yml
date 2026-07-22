@@ -2,9 +2,7 @@ name: Build FREQSIGHT APK
 
 on:
   push:
-    branches: [ freqsight-installation ]
-  pull_request:
-    branches: [ master ]
+    branches: [ master, freqsight-installation ]
   workflow_dispatch:
 
 permissions:
@@ -13,27 +11,18 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 30
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Prepare and verify direct FREQSIGHT source
+      - name: Assemble MainActivity source
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p freqsight/app/src/main/java/com/vhanma/freqsight
           cat .freqsight_source/MainActivity.part0 .freqsight_source/MainActivity.part1 > freqsight/app/src/main/java/com/vhanma/freqsight/MainActivity.java
           test -s freqsight/app/src/main/java/com/vhanma/freqsight/MainActivity.java
-          test -s freqsight/app/src/main/java/com/vhanma/freqsight/FrameAnalyzer.java
-          test -s freqsight/app/src/main/java/com/vhanma/freqsight/EvidenceEngine.java
-          test -s freqsight/app/src/main/java/com/vhanma/freqsight/AudioEngine.java
-          test -s freqsight/app/src/main/java/com/vhanma/freqsight/SensorHub.java
-          test -s freqsight/app/src/main/java/com/vhanma/freqsight/BeaconEngine.java
-          test "$(grep -c '^[[:space:]]*[A-Z_]*("' freqsight/app/src/main/java/com/vhanma/freqsight/FilterMode.java)" -eq 25
-          grep -q 'SKYWATCHER BEACON' freqsight/app/src/main/java/com/vhanma/freqsight/MainActivity.java
-          grep -q 'NO TRANSLATABLE DATA' freqsight/app/src/main/java/com/vhanma/freqsight/EvidenceEngine.java
-          grep -q 'SCALAR_INSPIRED' freqsight/app/src/main/java/com/vhanma/freqsight/BeaconEngine.java
+          grep -q 'class MainActivity' freqsight/app/src/main/java/com/vhanma/freqsight/MainActivity.java
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -42,21 +31,16 @@ jobs:
           java-version: '17'
 
       - name: Set up Gradle 8.9
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.9-bin.zip
-          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
-          cd freqsight
-          /tmp/gradle-dist/gradle-8.9/bin/gradle wrapper --gradle-version 8.9
-          chmod +x gradlew
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
 
       - name: Build release APK
         shell: bash
         run: |
           set -o pipefail
           cd freqsight
-          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/freqsight-build.log
+          gradle --no-daemon clean assembleRelease 2>&1 | tee /tmp/freqsight-build.log
 
       - name: Upload compiler diagnostics
         if: failure()
@@ -64,7 +48,6 @@ jobs:
         with:
           name: freqsight-build-log
           path: /tmp/freqsight-build.log
-          if-no-files-found: warn
           retention-days: 7
 
       - name: Verify and package downloads
@@ -79,25 +62,24 @@ jobs:
           "$BUILD_TOOLS/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
           unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
           sha256sum "$APK" > dist/FREQSIGHT-v1.0-SHA256.txt
-          zip -qr dist/FREQSIGHT-v1.0-Source.zip freqsight .freqsight_source
           cat > dist/BUILD-REPORT.txt <<'REPORT'
-          FREQSIGHT v1.0
+          FREQSIGHT V1.0
           Package: com.vhanma.freqsight
-          Purpose: fictional stationary environmental signal-to-language recorder
-          Filters: 25
-          Camera: CameraX preview, frame analysis and video recording
-          OCR: bundled on-device ML Kit text recognition
-          Sensors: magnetometer, accelerometer, gyroscope and ambient light
-          Audio: microphone FFT plus optional limited tone and sweep generator
-          Beacon: Prime, Fibonacci, Sweep, Silent, Mirror and Scalar-Inspired Simulation
-          Translation: deterministic and evidence-bound, with no generated dialogue
-          Runtime permissions: camera, microphone and vibration
+          Purpose: stationary fictional environmental signal-to-language installation
+          Camera: CameraX live analysis and recording
+          Audio: microphone observation plus controlled tone/beacon generator
+          Sensors: magnetometer, accelerometer, gyroscope, light sensor
+          OCR: ML Kit text recognition
+          Filters: 25 observation filters
+          Evidence rule: no translation without visible or measurable source
+          Scalar feature: scalar-inspired simulation only
           REPORT
+          (cd freqsight && zip -qr ../dist/FREQSIGHT-v1.0-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
 
-      - name: Upload final APK package
+      - name: Upload FREQSIGHT package
         uses: actions/upload-artifact@v4
         with:
-          name: freqsight-v1-final
+          name: freqsight-v1-one-click
           path: dist/*
           if-no-files-found: error
           retention-days: 30

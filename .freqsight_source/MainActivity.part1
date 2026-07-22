@@ -1,0 +1,132 @@
+    private void calibrate(){
+        if(!sensors.isStable()){status("Phone movement detected. Stabilize the installation before calibration.");return;}
+        sessionActive=true;logger.startSession();
+        sensors.beginBaseline();audio.beginBaseline();analyzer.beginCalibration(150);
+        ocrEnabled=false;glyphEnabled=false;analyzer.setGlyphMode(false);
+        status("Calibrating baseline: camera, smoke drift, reflections, shadows, audio and sensors…");
+        evidenceView.setText("NO TRANSLATABLE DATA.");
+    }
+
+    private void beginWatch(){
+        if(!analyzer.isBaselineReady()){status("Calibrate the stationary baseline first.");return;}
+        if(!sessionActive){logger.startSession();sessionActive=true;}
+        liveWatch=true;analyzer.setWatching(true);audio.startListening();
+        status("Baseline complete. Listening for difference.");
+    }
+
+    private void toggleGlyph(){glyphEnabled=!glyphEnabled;analyzer.setGlyphMode(glyphEnabled);if(glyphEnabled)setFilter(FilterMode.GLYPH_EDGE);status(glyphEnabled?"EM Glyph Capture armed. Camera image remains primary evidence.":"EM Glyph Capture off.");}
+    private void toggleOcr(){ocrEnabled=!ocrEnabled;status(ocrEnabled?"Live OCR armed for repeated text-like marks.":"Live OCR off.");}
+    private void setFilter(FilterMode f){analyzer.setFilter(f);modeView.setText(f.label.toUpperCase(Locale.US));processedView.setVisibility(f==FilterMode.RAW?View.GONE:View.VISIBLE);}
+
+    private void showFilterDialog(){
+        FilterMode[] modes=FilterMode.values();String[] labels=new String[modes.length];for(int i=0;i<modes.length;i++)labels[i]=modes[i].label;
+        new AlertDialog.Builder(this).setTitle("Observation filters").setItems(labels,(d,w)->setFilter(modes[w])).setNegativeButton("CLOSE",null).show();
+    }
+
+    private void showFrequencyDialog(){
+        LinearLayout p=dialogPanel();
+        EditText hz=numberField("1000",p,"Tone frequency Hz");
+        EditText end=numberField("12000",p,"Sweep end Hz");
+        Spinner duration=spinner(new String[]{"250 ms","500 ms","1 second","3 seconds","5 seconds"});addField(p,"DURATION",duration);
+        CheckBox sweep=new CheckBox(this);sweep.setText("Frequency sweep");sweep.setTextColor(Color.WHITE);p.addView(sweep);
+        CheckBox ultrasonic=new CheckBox(this);ultrasonic.setText("Ultrasonic-style attempt (device-limited simulation)");ultrasonic.setTextColor(Color.WHITE);p.addView(ultrasonic);
+        new AlertDialog.Builder(this).setTitle("Safe calibration emission").setView(p).setPositiveButton("EMIT",(d,w)->{
+            double start=parse(hz.getText().toString(),1000);double finish=parse(end.getText().toString(),12000);int ms=parseDurationLabel(String.valueOf(duration.getSelectedItem()));
+            if(ultrasonic.isChecked()){start=Math.max(16000,start);finish=Math.min(19500,Math.max(start,finish));status(audio.supportsUltrasonicStyle()?"Ultrasonic-style high-tone attempt. Acoustic output remains device-dependent.":"Ultrasonic-style output simulated: device sample rate insufficient.");}
+            if(sweep.isChecked())audio.playSweep(start,finish,ms,0.08f);else audio.playTone(Math.min(19500,start),ms,0.08f,true,true);
+        }).setNegativeButton("CANCEL",null).show();
+    }
+
+    private void showBeaconDialog(){
+        LinearLayout p=dialogPanel();
+        String[] names=new String[BeaconEngine.Pattern.values().length];for(int i=0;i<names.length;i++)names[i]=BeaconEngine.Pattern.values()[i].label;
+        Spinner pattern=spinner(names);addField(p,"PATTERN",pattern);
+        EditText hz=numberField("12000",p,"Base frequency Hz");
+        Spinner unit=spinner(new String[]{"250 ms unit","500 ms unit","750 ms unit","1000 ms unit"});addField(p,"TIMING UNIT",unit);
+        CheckBox audioOn=new CheckBox(this);audioOn.setText("Audio output");audioOn.setChecked(true);audioOn.setTextColor(Color.WHITE);p.addView(audioOn);
+        CheckBox visualOnly=new CheckBox(this);visualOnly.setText("Visual-only simulation");visualOnly.setTextColor(Color.WHITE);p.addView(visualOnly);
+        TextView rule=text("The beacon does not speak for them. It only knocks. The chamber must answer.",12,CYAN,true);rule.setPadding(0,10,0,0);p.addView(rule);
+        new AlertDialog.Builder(this).setTitle("SKYWATCHER BEACON").setView(p).setPositiveButton("ARM AND EMIT",(d,w)->{
+            if(!analyzer.isBaselineReady()){status("Beacon requires a completed baseline.");return;}
+            int unitMs=new int[]{250,500,750,1000}[unit.getSelectedItemPosition()];
+            double base=Math.min(19500,Math.max(100,parse(hz.getText().toString(),12000)));
+            beacon.start(BeaconEngine.Pattern.values()[pattern.getSelectedItemPosition()],base,audioOn.isChecked(),visualOnly.isChecked(),unitMs);
+        }).setNeutralButton("STOP",(d,w)->beacon.stop()).setNegativeButton("CANCEL",null).show();
+    }
+
+    private void toggleRecording(){if(recording==null)startRecording();else stopRecording();}
+    private void startRecording(){
+        if(videoCapture==null){status("Video recorder unavailable.");return;}
+        if(ContextCompat.checkSelfPermission(this,Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED){permissionLauncher.launch(new String[]{Manifest.permission.RECORD_AUDIO});return;}
+        if(!sessionActive){logger.startSession();sessionActive=true;}
+        String name="FREQSIGHT_"+new SimpleDateFormat("yyyyMMdd_HHmmss",Locale.US).format(new Date())+".mp4";
+        ContentValues values=new ContentValues();values.put(MediaStore.Video.Media.DISPLAY_NAME,name);values.put(MediaStore.Video.Media.MIME_TYPE,"video/mp4");values.put(MediaStore.Video.Media.RELATIVE_PATH,"Movies/FREQSIGHT");
+        MediaStoreOutputOptions options=new MediaStoreOutputOptions.Builder(getContentResolver(),MediaStore.Video.Media.EXTERNAL_CONTENT_URI).setContentValues(values).build();
+        PendingRecording pending=videoCapture.getOutput().prepareRecording(this,options).withAudioEnabled();
+        recording=pending.start(ContextCompat.getMainExecutor(this),event->{
+            if(event instanceof VideoRecordEvent.Start){recordingView.setText("● RECORDING");status("Recording video, audio and timestamped sensor stream.");}
+            else if(event instanceof VideoRecordEvent.Finalize f){recordingView.setText("");recording=null;status(f.hasError()?"Recording error: "+f.getError():"Recording saved: "+f.getOutputResults().getOutputUri());}
+        });
+    }
+    private void stopRecording(){if(recording!=null){recording.stop();recording=null;}recordingView.setText("");}
+
+    private void exportTranscript(){ioExecutor.execute(()->{Uri uri=logger.exportZip();runOnUiThread(()->status(uri==null?"Export failed.":"Evidence package exported to Downloads/FREQSIGHT."));});}
+
+    @Override public void onCalibrationProgress(int current,int total){runOnUiThread(()->status("Calibrating baseline… "+current+" / "+total));}
+    @Override public void onCalibrationComplete(){runOnUiThread(()->{sensors.completeBaseline();audio.completeBaseline();if(camera!=null)cameraLock.lock(camera);status("Baseline complete. Listening for difference.");});}
+
+    @Override public void onFrame(Bitmap bitmap,DataModels.VisualEvent m,FilterMode mode){runOnUiThread(()->{
+        latestVisual=m;if(mode!=FilterMode.RAW)processedView.setImageBitmap(bitmap);
+        metricsView.setText(String.format(Locale.US,"frame %d | difference %.2f | smoke %.2f | shadow %.2f | reflection %.2f | condensation %.2f | region %s\n%s\n%s",
+                m.frameNumber,m.differenceScore,m.smokeScore,m.shadowScore,m.reflectionScore,m.condensationScore,m.region(),latestSensor.compact(),latestAudio.compact()));
+    });}
+
+    @Override public void onVisualEvent(DataModels.VisualEvent event){
+        environmentalEventTimes.add(event.timestampMs);while(environmentalEventTimes.size()>60)environmentalEventTimes.remove(0);
+        if(ocrEnabled && event.rawFrame!=null && System.currentTimeMillis()-lastOcrMs>700){
+            lastOcrMs=System.currentTimeMillis();InputImage image=InputImage.fromBitmap(event.rawFrame,0);
+            textRecognizer.process(image).addOnSuccessListener(result->{event.rawOcr=result.getText();renderEvidence(event);}).addOnFailureListener(e->renderEvidence(event));
+        }else renderEvidence(event);
+    }
+
+    private void renderEvidence(DataModels.VisualEvent event){
+        String mirror=beaconMatch();
+        DataModels.EvidenceEvent rendered=evidence.render(event,latestSensor,latestAudio,!"passive".equals(beaconState),mirror);
+        logger.logEvidence(rendered,event);
+        runOnUiThread(()->evidenceView.setText(rendered.englishRendering+"\nRaw: "+rendered.rawPattern+"\nConfidence: "+rendered.confidence+"%\nAlternate: "+rendered.alternateRendering));
+    }
+
+    private String beaconMatch(){
+        List<Long> emitted=beacon.emittedTimes();if(emitted.size()<2||environmentalEventTimes.size()<2)return "";
+        int matches=0;int compared=0;
+        for(int i=1;i<emitted.size();i++){
+            long target=emitted.get(i)-emitted.get(i-1);long best=Long.MAX_VALUE;
+            for(int j=1;j<environmentalEventTimes.size();j++){long interval=environmentalEventTimes.get(j)-environmentalEventTimes.get(j-1);best=Math.min(best,Math.abs(interval-target));}
+            compared++;if(best<180)matches++;
+        }
+        if(compared>=2&&matches>=Math.max(2,compared/2))return "response resembles emitted timing pattern";
+        return "";
+    }
+
+    @Override public void onSensorSnapshot(DataModels.SensorSnapshot snapshot){latestSensor=snapshot;if(sessionActive)logger.logSensor(snapshot);}
+    @Override public void onAudioSnapshot(DataModels.AudioSnapshot snapshot){latestAudio=snapshot;if(sessionActive&&(snapshot.pulse||snapshot.click||snapshot.repeatedPattern))logger.logAudio(snapshot);}
+    @Override public void onCameraMetadata(String text){runOnUiThread(()->metadataView.setText(text));}
+    @Override public void onBeaconState(String state){beaconState=state;runOnUiThread(()->status(state));}
+    @Override public void onBeaconPulse(BeaconEngine.BeaconPulse pulse){if(!sessionActive){logger.startSession();sessionActive=true;}logger.logBeacon(pulse);}
+    @Override public void onVisualPulse(boolean on){runOnUiThread(()->beaconFlash.setVisibility(on?View.VISIBLE:View.GONE));}
+
+    private void status(String text){runOnUiThread(()->statusView.setText(text));}
+
+    private TextView text(String s,int size,int color,boolean bold){TextView v=new TextView(this);v.setText(s);v.setTextSize(size);v.setTextColor(color);if(bold)v.setTypeface(Typeface.DEFAULT,Typeface.BOLD);return v;}
+    private void addButton(LinearLayout parent,String label,View.OnClickListener click){Button b=new Button(this);b.setText(label);b.setTextColor(Color.WHITE);b.setBackgroundColor(0xFF12344A);b.setOnClickListener(click);LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(dp(170),dp(64));p.setMargins(dp(3),dp(3),dp(3),dp(3));parent.addView(b,p);}
+    private LinearLayout dialogPanel(){LinearLayout p=new LinearLayout(this);p.setOrientation(LinearLayout.VERTICAL);p.setPadding(dp(18),dp(8),dp(18),dp(8));p.setBackgroundColor(PANEL);return p;}
+    private EditText numberField(String value,LinearLayout parent,String label){TextView l=text(label,12,CYAN,true);parent.addView(l);EditText e=new EditText(this);e.setText(value);e.setTextColor(Color.WHITE);e.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);parent.addView(e,new LinearLayout.LayoutParams(-1,-2));return e;}
+    private Spinner spinner(String[] values){Spinner s=new Spinner(this);ArrayAdapter<String>a=new ArrayAdapter<>(this,android.R.layout.simple_spinner_dropdown_item,values);s.setAdapter(a);return s;}
+    private void addField(LinearLayout p,String label,Spinner s){p.addView(text(label,12,CYAN,true));p.addView(s,new LinearLayout.LayoutParams(-1,-2));}
+    private LinearLayout.LayoutParams lp(int w,int h,float weight){return new LinearLayout.LayoutParams(w,h,weight);}
+    private int dp(int v){return Math.round(v*getResources().getDisplayMetrics().density);}
+    private double parse(String s,double fallback){try{return Double.parseDouble(s);}catch(Exception e){return fallback;}}
+    private int parseDurationLabel(String s){if(s.startsWith("250"))return 250;if(s.startsWith("500"))return 500;if(s.startsWith("1 "))return 1000;if(s.startsWith("3 "))return 3000;return 5000;}
+
+    @Override protected void onDestroy(){super.onDestroy();beacon.stop();audio.stopListening();sensors.stop();analyzer.setWatching(false);cameraExecutor.shutdownNow();ioExecutor.shutdownNow();textRecognizer.close();if(recording!=null)recording.stop();}
+}
