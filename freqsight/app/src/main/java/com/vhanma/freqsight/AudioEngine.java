@@ -28,7 +28,6 @@ final class AudioEngine {
     private AudioRecord recorder;
     private volatile DataModels.AudioSnapshot latest = new DataModels.AudioSnapshot();
     private final Deque<Long> clickTimes = new ArrayDeque<>();
-
     private boolean baselineReady;
     private int baselineCount;
     private double rmsMean, rmsM2, peakMean, peakM2;
@@ -45,7 +44,6 @@ final class AudioEngine {
     }
 
     void completeBaseline() { baselineReady = baselineCount >= 8; }
-
     DataModels.AudioSnapshot snapshot() { return latest; }
 
     void startListening() {
@@ -68,8 +66,7 @@ final class AudioEngine {
         listening.set(false);
         if (recorder != null) {
             try { recorder.stop(); } catch (Exception ignored) {}
-            recorder.release();
-            recorder = null;
+            recorder.release(); recorder = null;
         }
         if (thread != null) {
             try { thread.join(500); } catch (InterruptedException ignored) {}
@@ -89,8 +86,7 @@ final class AudioEngine {
     }
 
     private DataModels.AudioSnapshot analyze(short[] samples, int n) {
-        double sum = 0;
-        double max = 0;
+        double sum = 0, max = 0;
         double[] real = new double[FFT_SIZE];
         double[] imag = new double[FFT_SIZE];
         for (int i = 0; i < FFT_SIZE; i++) {
@@ -176,16 +172,67 @@ final class AudioEngine {
     boolean supportsUltrasonicStyle() { return deviceOutputSampleRate() >= 48000; }
 
     void playTone(double frequency, int durationMs, float amplitude, boolean left, boolean right) {
-        amplitude = Math.max(0f, Math.min(0.12f, amplitude));
+        playChord(new double[]{frequency}, durationMs, amplitude, left, right);
+    }
+
+    void playChord(double[] frequencies, int durationMs, float amplitude, boolean left, boolean right) {
+        amplitude = Math.max(0f, Math.min(0.10f, amplitude));
         int sampleRate = Math.max(44100, deviceOutputSampleRate());
         int count = Math.max(1, sampleRate * durationMs / 1000);
         short[] data = new short[count * 2];
+        int valid = 0;
+        for (double f : frequencies) if (f > 20 && f < sampleRate * 0.48) valid++;
+        final int divisor = Math.max(1, valid);
         for (int i = 0; i < count; i++) {
-            double envelope = Math.min(1.0, i / (sampleRate * 0.015)) * Math.min(1.0, (count - i) / (sampleRate * 0.02));
-            short v = (short) (Math.sin(2 * Math.PI * frequency * i / sampleRate) * amplitude * envelope * Short.MAX_VALUE);
+            double env = attackRelease(i, count, sampleRate);
+            double sum = 0;
+            for (double f : frequencies) {
+                if (f > 20 && f < sampleRate * 0.48) sum += Math.sin(2 * Math.PI * f * i / sampleRate);
+            }
+            short v = (short) (sum / divisor * amplitude * env * Short.MAX_VALUE);
             data[i * 2] = left ? v : 0;
             data[i * 2 + 1] = right ? v : 0;
         }
+        playStatic(data, sampleRate, durationMs, "FreqSightChord");
+    }
+
+    void playSweep(double fromHz, double toHz, int durationMs, float amplitude) {
+        playDualSweep(fromHz, toHz, fromHz, toHz, durationMs, amplitude, false);
+    }
+
+    void playDualSweep(double fromA, double toA, double fromB, double toB, int durationMs, float amplitude, boolean opposingStereo) {
+        amplitude = Math.max(0f, Math.min(0.09f, amplitude));
+        int sampleRate = Math.max(44100, deviceOutputSampleRate());
+        int count = Math.max(1, sampleRate * durationMs / 1000);
+        short[] data = new short[count * 2];
+        double phaseA = 0, phaseB = 0;
+        for (int i = 0; i < count; i++) {
+            double t = i / Math.max(1.0, count - 1.0);
+            double fA = fromA + (toA - fromA) * t;
+            double fB = fromB + (toB - fromB) * t;
+            phaseA += 2 * Math.PI * fA / sampleRate;
+            phaseB += 2 * Math.PI * fB / sampleRate;
+            double env = Math.sin(Math.PI * t);
+            short a = (short) (Math.sin(phaseA) * amplitude * env * Short.MAX_VALUE);
+            short b = (short) (Math.sin(phaseB) * amplitude * env * Short.MAX_VALUE);
+            if (opposingStereo) {
+                data[i * 2] = a;
+                data[i * 2 + 1] = b;
+            } else {
+                short mix = (short) ((a + b) / 2);
+                data[i * 2] = mix; data[i * 2 + 1] = mix;
+            }
+        }
+        playStatic(data, sampleRate, durationMs, "FreqSightDualSweep");
+    }
+
+    private double attackRelease(int i, int count, int sampleRate) {
+        double a = Math.min(1.0, i / Math.max(1.0, sampleRate * 0.012));
+        double r = Math.min(1.0, (count - i) / Math.max(1.0, sampleRate * 0.025));
+        return a * r;
+    }
+
+    private void playStatic(short[] data, int sampleRate, int durationMs, String name) {
         new Thread(() -> {
             try {
                 AudioTrack track = new AudioTrack(AudioManager.STREAM_MUSIC, sampleRate,
@@ -196,31 +243,7 @@ final class AudioEngine {
                 Thread.sleep(durationMs + 60L);
                 track.stop(); track.release();
             } catch (Exception ignored) {}
-        }, "FreqSightTone").start();
-    }
-
-    void playSweep(double fromHz, double toHz, int durationMs, float amplitude) {
-        amplitude = Math.max(0f, Math.min(0.10f, amplitude));
-        int sampleRate = Math.max(44100, deviceOutputSampleRate());
-        int count = Math.max(1, sampleRate * durationMs / 1000);
-        short[] data = new short[count * 2];
-        double phase = 0;
-        for (int i = 0; i < count; i++) {
-            double f = fromHz + (toHz - fromHz) * i / Math.max(1.0, count - 1.0);
-            phase += 2 * Math.PI * f / sampleRate;
-            double env = Math.sin(Math.PI * i / Math.max(1.0, count - 1.0));
-            short v = (short) (Math.sin(phase) * amplitude * env * Short.MAX_VALUE);
-            data[i * 2] = v; data[i * 2 + 1] = v;
-        }
-        new Thread(() -> {
-            try {
-                AudioTrack track = new AudioTrack(AudioManager.STREAM_MUSIC, sampleRate,
-                        AudioFormat.CHANNEL_OUT_STEREO, AudioFormat.ENCODING_PCM_16BIT,
-                        data.length * 2, AudioTrack.MODE_STATIC);
-                track.write(data, 0, data.length); track.play();
-                Thread.sleep(durationMs + 60L); track.stop(); track.release();
-            } catch (Exception ignored) {}
-        }, "FreqSightSweep").start();
+        }, name).start();
     }
 
     private static void fft(double[] real, double[] imag) {
