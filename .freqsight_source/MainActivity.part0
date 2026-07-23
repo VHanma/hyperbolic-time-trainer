@@ -1,0 +1,203 @@
+package com.vhanma.freqsight;
+
+import android.Manifest;
+import android.app.AlertDialog;
+import android.content.ContentValues;
+import android.content.pm.PackageManager;
+import android.content.res.Configuration;
+import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.net.Uri;
+import android.os.Bundle;
+import android.provider.MediaStore;
+import android.text.InputType;
+import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.View;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
+import android.widget.ImageView;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.Spinner;
+import android.widget.TextView;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.Camera;
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.Preview;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.camera.video.FallbackStrategy;
+import androidx.camera.video.MediaStoreOutputOptions;
+import androidx.camera.video.PendingRecording;
+import androidx.camera.video.Quality;
+import androidx.camera.video.QualitySelector;
+import androidx.camera.video.Recorder;
+import androidx.camera.video.Recording;
+import androidx.camera.video.VideoCapture;
+import androidx.camera.video.VideoRecordEvent;
+import androidx.camera.view.PreviewView;
+import androidx.core.content.ContextCompat;
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.TextRecognition;
+import com.google.mlkit.vision.text.TextRecognizer;
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public final class MainActivity extends AppCompatActivity implements
+        SensorHub.Listener, AudioEngine.Listener, FrameAnalyzer.Listener,
+        CameraLockController.Listener, BeaconEngine.Listener {
+
+    private static final int BG=0xFF05080D, PANEL=0xFF0B131C, CYAN=0xFF59E6FF, MUTED=0xFFA5B4C2, ALERT=0xFFFFC857;
+    private final ExecutorService cameraExecutor=Executors.newSingleThreadExecutor();
+    private final ExecutorService ioExecutor=Executors.newSingleThreadExecutor();
+
+    private FrameLayout cameraFrame;
+    private PreviewView previewView;
+    private ImageView processedView;
+    private View beaconFlash;
+    private Button rawFilterButton;
+    private TextView statusView, metricsView, evidenceView, modeView, metadataView, recordingView;
+    private ProcessCameraProvider cameraProvider;
+    private Camera camera;
+    private VideoCapture<Recorder> videoCapture;
+    private Recording recording;
+    private SensorHub sensors;
+    private AudioEngine audio;
+    private FrameAnalyzer analyzer;
+    private EvidenceEngine evidence;
+    private SessionLogger logger;
+    private CameraLockController cameraLock;
+    private BeaconEngine beacon;
+    private TextRecognizer textRecognizer;
+    private boolean liveWatch, ocrEnabled, glyphEnabled, sessionActive;
+    private long lastOcrMs;
+    private DataModels.SensorSnapshot latestSensor=new DataModels.SensorSnapshot();
+    private DataModels.AudioSnapshot latestAudio=new DataModels.AudioSnapshot();
+    private DataModels.VisualEvent latestVisual;
+    private final List<Long> environmentalEventTimes=new ArrayList<>();
+    private String beaconState="passive";
+    private float swipeDownX,swipeDownY;
+
+    private final ActivityResultLauncher<String[]> permissionLauncher=registerForActivityResult(
+            new ActivityResultContracts.RequestMultiplePermissions(), result -> {
+                Boolean cameraGranted=result.get(Manifest.permission.CAMERA);
+                if(Boolean.TRUE.equals(cameraGranted))bindCamera();
+                if(Boolean.TRUE.equals(result.get(Manifest.permission.RECORD_AUDIO)))audio.startListening();
+            });
+
+    @Override protected void onCreate(Bundle savedInstanceState){
+        super.onCreate(savedInstanceState);
+        getWindow().setStatusBarColor(BG);getWindow().setNavigationBarColor(BG);
+        sensors=new SensorHub(this,this);
+        audio=new AudioEngine(this,this);
+        evidence=new EvidenceEngine();
+        logger=new SessionLogger(this);
+        cameraLock=new CameraLockController(this);
+        analyzer=new FrameAnalyzer(sensors,this);
+        beacon=new BeaconEngine(audio,this);
+        textRecognizer=TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS);
+        buildUi();
+        sensors.start();
+        ensurePermissions();
+    }
+
+    private void ensurePermissions(){
+        List<String> missing=new ArrayList<>();
+        if(ContextCompat.checkSelfPermission(this,Manifest.permission.CAMERA)!=PackageManager.PERMISSION_GRANTED)missing.add(Manifest.permission.CAMERA);
+        if(ContextCompat.checkSelfPermission(this,Manifest.permission.RECORD_AUDIO)!=PackageManager.PERMISSION_GRANTED)missing.add(Manifest.permission.RECORD_AUDIO);
+        if(missing.isEmpty()){bindCamera();audio.startListening();}
+        else permissionLauncher.launch(missing.toArray(new String[0]));
+    }
+
+    private void buildUi(){
+        String oldStatus=statusView==null?"Set the phone completely still, then calibrate.":statusView.getText().toString();
+        String oldEvidence=evidenceView==null?"NO TRANSLATABLE DATA.":evidenceView.getText().toString();
+        boolean landscape=getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE;
+        LinearLayout root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setBackgroundColor(BG);root.setPadding(dp(landscape?6:10),dp(landscape?4:8),dp(landscape?6:10),dp(landscape?4:8));
+        TextView title=text("FREQSIGHT",landscape?20:26,Color.WHITE,true);title.setGravity(Gravity.CENTER);root.addView(title,lp(-1,-2,0));
+        TextView creed=text("NO MESSAGE WITHOUT A MARK • NO WORD WITHOUT A WAVEFORM • NO ENGLISH WITHOUT EVIDENCE",landscape?9:11,CYAN,true);creed.setGravity(Gravity.CENTER);creed.setPadding(4,2,4,landscape?3:8);root.addView(creed,lp(-1,-2,0));
+
+        cameraFrame=new FrameLayout(this);cameraFrame.setBackgroundColor(Color.BLACK);
+        previewView=new PreviewView(this);previewView.setImplementationMode(PreviewView.ImplementationMode.COMPATIBLE);previewView.setScaleType(PreviewView.ScaleType.FIT_CENTER);cameraFrame.addView(previewView,new FrameLayout.LayoutParams(-1,-1));
+        processedView=new ImageView(this);processedView.setScaleType(ImageView.ScaleType.FIT_CENTER);processedView.setVisibility(analyzer!=null&&analyzer.getFilter()!=FilterMode.RAW?View.VISIBLE:View.GONE);cameraFrame.addView(processedView,new FrameLayout.LayoutParams(-1,-1));
+        beaconFlash=new View(this);beaconFlash.setBackgroundColor(Color.argb(130,220,250,255));beaconFlash.setVisibility(View.GONE);cameraFrame.addView(beaconFlash,new FrameLayout.LayoutParams(-1,-1));
+        modeView=text((analyzer==null?FilterMode.RAW:analyzer.getFilter()).label.toUpperCase(Locale.US)+"  •  SWIPE FILTERS",landscape?10:12,CYAN,true);modeView.setBackgroundColor(0x99000000);FrameLayout.LayoutParams mlp=new FrameLayout.LayoutParams(-2,-2,Gravity.TOP|Gravity.LEFT);mlp.setMargins(dp(8),dp(8),0,0);cameraFrame.addView(modeView,mlp);
+        recordingView=text(recording==null?"":"● RECORDING",landscape?10:12,Color.RED,true);recordingView.setBackgroundColor(0x99000000);FrameLayout.LayoutParams rlp=new FrameLayout.LayoutParams(-2,-2,Gravity.BOTTOM|Gravity.RIGHT);rlp.setMargins(0,0,dp(8),dp(8));cameraFrame.addView(recordingView,rlp);
+        rawFilterButton=new Button(this);rawFilterButton.setText("✕");rawFilterButton.setTextSize(22);rawFilterButton.setTextColor(Color.WHITE);rawFilterButton.setBackgroundColor(0xAA101820);rawFilterButton.setPadding(0,0,0,0);rawFilterButton.setOnClickListener(v->setFilter(FilterMode.RAW));FrameLayout.LayoutParams xlp=new FrameLayout.LayoutParams(dp(50),dp(50),Gravity.TOP|Gravity.RIGHT);xlp.setMargins(0,dp(4),dp(4),0);cameraFrame.addView(rawFilterButton,xlp);
+        cameraFrame.setOnTouchListener((v,event)->handleCameraSwipe(event));
+        root.addView(cameraFrame,lp(-1,0,landscape?2.7f:1.2f));
+
+        statusView=text(oldStatus,landscape?12:15,Color.WHITE,true);statusView.setBackgroundColor(PANEL);statusView.setPadding(dp(10),dp(landscape?5:8),dp(10),dp(landscape?5:8));root.addView(statusView,lp(-1,-2,0));
+        metricsView=text("Awaiting sensor stream…",landscape?9:11,MUTED,false);metricsView.setMaxLines(landscape?2:3);root.addView(metricsView,lp(-1,-2,0));
+        metadataView=text("Camera controls not locked.",landscape?9:11,MUTED,false);metadataView.setMaxLines(2);root.addView(metadataView,lp(-1,-2,0));
+        evidenceView=text(oldEvidence,landscape?10:13,ALERT,true);evidenceView.setBackgroundColor(0xFF071019);evidenceView.setPadding(dp(10),dp(landscape?5:8),dp(10),dp(landscape?5:8));evidenceView.setMaxLines(landscape?3:6);root.addView(evidenceView,lp(-1,-2,0));
+
+        HorizontalScrollView horizontal=new HorizontalScrollView(this);LinearLayout controls=new LinearLayout(this);controls.setOrientation(LinearLayout.HORIZONTAL);horizontal.addView(controls);
+        addButton(controls,"CALIBRATE BASELINE",v->calibrate());
+        addButton(controls,"BEGIN LIVE WATCH",v->beginWatch());
+        addButton(controls,"DIFFERENCE MAP",v->setFilter(FilterMode.DIFFERENCE_HEAT));
+        addButton(controls,"SMOKE MAP",v->setFilter(FilterMode.SMOKE_ENHANCE));
+        addButton(controls,"SHADOW MAP",v->setFilter(FilterMode.SHADOW_GEOMETRY));
+        addButton(controls,"REFLECTION MAP",v->setFilter(FilterMode.REFRACTION_MAP));
+        addButton(controls,"EM GLYPH CAPTURE",v->toggleGlyph());
+        addButton(controls,"LIVE OCR",v->toggleOcr());
+        addButton(controls,"RECORD SESSION",v->toggleRecording());
+        addButton(controls,"FILTERS",v->showFilterDialog());
+        addButton(controls,"FREQUENCY CALIBRATION",v->showFrequencyDialog());
+        addButton(controls,"SKYWATCHER BEACON",v->showBeaconDialog());
+        addButton(controls,"EXPORT TRANSCRIPT",v->exportTranscript());
+        root.addView(horizontal,lp(-1,dp(landscape?62:82),0));
+        setContentView(root);
+        updateRawButton();
+    }
+
+    private boolean handleCameraSwipe(MotionEvent event){
+        if(event.getAction()==MotionEvent.ACTION_DOWN){swipeDownX=event.getX();swipeDownY=event.getY();return true;}
+        if(event.getAction()==MotionEvent.ACTION_UP){float dx=event.getX()-swipeDownX,dy=event.getY()-swipeDownY;if(Math.abs(dx)>dp(55)&&Math.abs(dx)>Math.abs(dy)*1.25f){cycleFilter(dx<0?1:-1);}return true;}
+        return true;
+    }
+
+    private void cycleFilter(int direction){
+        FilterMode[] modes=FilterMode.values();int current=analyzer.getFilter().ordinal();int next=(current+direction+modes.length)%modes.length;setFilter(modes[next]);
+    }
+
+    private void updateRawButton(){if(rawFilterButton!=null)rawFilterButton.setVisibility(analyzer!=null&&analyzer.getFilter()==FilterMode.RAW?View.INVISIBLE:View.VISIBLE);}
+
+    @Override public void onConfigurationChanged(@NonNull Configuration newConfig){
+        super.onConfigurationChanged(newConfig);buildUi();bindCamera();status("Orientation changed. Recalibrate the stationary baseline for this view.");
+    }
+
+    private void bindCamera(){
+        if(previewView==null)return;
+        ListenableFuture<ProcessCameraProvider> future=ProcessCameraProvider.getInstance(this);
+        future.addListener(()->{
+            try{
+                cameraProvider=future.get();cameraProvider.unbindAll();
+                int rotation=previewView.getDisplay()==null?0:previewView.getDisplay().getRotation();
+                Preview preview=new Preview.Builder().setTargetRotation(rotation).build();preview.setSurfaceProvider(previewView.getSurfaceProvider());
+                ImageAnalysis.Builder ab=new ImageAnalysis.Builder().setTargetRotation(rotation).setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST);
+                cameraLock.attachCaptureCallback(ab,cameraExecutor);
+                ImageAnalysis analysis=ab.build();analysis.setAnalyzer(cameraExecutor,analyzer);
+                Recorder recorder=new Recorder.Builder().setQualitySelector(QualitySelector.from(Quality.HD, FallbackStrategy.lowerQualityOrHigherThan(Quality.SD))).build();
+                videoCapture=VideoCapture.withOutput(recorder);
+                camera=cameraProvider.bindToLifecycle(this,CameraSelector.DEFAULT_BACK_CAMERA,preview,analysis,videoCapture);
+                status("Camera ready in "+(getResources().getConfiguration().orientation==Configuration.ORIENTATION_LANDSCAPE?"landscape":"portrait")+". Keep the phone fixed and calibrate.");
+            }catch(Exception e){status("Camera start failed: "+e.getMessage());}
+        },ContextCompat.getMainExecutor(this));
+    }
