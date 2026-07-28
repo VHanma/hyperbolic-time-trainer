@@ -44,21 +44,19 @@ jobs:
           ./gradlew --no-daemon clean assembleRelease >> ../runtime-evidence/gradle.log 2>&1
           cp app/build/outputs/apk/release/app-release.apk ../runtime-evidence/Hanma-Combo-Caller-X-v2.0.2.apk
 
-      - name: Install Android 16 emulator quietly
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p runtime-evidence
-          sudo chmod 666 /dev/kvm || true
-          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > runtime-evidence/sdkmanager.log 2>&1 || true
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "emulator" "system-images;android-36;google_apis;x86_64" >> runtime-evidence/sdkmanager.log 2>&1
-          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name hanma36 --package "system-images;android-36;google_apis;x86_64" --device "pixel_6" >> runtime-evidence/sdkmanager.log 2>&1
-
-      - name: Boot, launch, and capture exact result
+      - name: Create Android 16 device, boot, launch, and capture exact result
         shell: bash
         run: |
           set +e
-          mkdir -p runtime-evidence
+          mkdir -p runtime-evidence .avd
+          export ANDROID_AVD_HOME="$GITHUB_WORKSPACE/.avd"
+          export ANDROID_SDK_HOME="$GITHUB_WORKSPACE"
+          sudo chmod 666 /dev/kvm || true
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > runtime-evidence/sdkmanager.log 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "emulator" "system-images;android-36;google_apis;x86_64" >> runtime-evidence/sdkmanager.log 2>&1
+          SDK_STATUS=$?
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name hanma36 --package "system-images;android-36;google_apis;x86_64" --device "pixel_6" >> runtime-evidence/sdkmanager.log 2>&1
+          AVD_STATUS=$?
           "$ANDROID_HOME/emulator/emulator" -avd hanma36 -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none > runtime-evidence/emulator.log 2>&1 &
           EMULATOR_PID=$!
           echo "$EMULATOR_PID" > runtime-evidence/emulator-host-pid.txt
@@ -72,7 +70,17 @@ jobs:
           echo "$BOOTED" > runtime-evidence/booted.txt
           if [ "$BOOTED" != "1" ]; then
             echo 90 > runtime-evidence/status.txt
-            tail -n 120 runtime-evidence/emulator.log > runtime-evidence/result-summary.txt
+            {
+              echo "STATUS=90"
+              echo "SDK_STATUS=$SDK_STATUS"
+              echo "AVD_STATUS=$AVD_STATUS"
+              echo "BOOTED=$BOOTED"
+              echo '--- AVD FILES ---'
+              find "$ANDROID_AVD_HOME" -maxdepth 3 -type f -print
+              echo '--- EMULATOR LOG ---'
+              tail -n 160 runtime-evidence/emulator.log
+            } > runtime-evidence/result-summary.txt
+            cat runtime-evidence/result-summary.txt
             exit 0
           fi
 
@@ -96,6 +104,8 @@ jobs:
           DRILL_STATUS=$?
 
           STATUS=0
+          if [ "$SDK_STATUS" != "0" ]; then STATUS=5; fi
+          if [ "$AVD_STATUS" != "0" ]; then STATUS=6; fi
           if [ "$INSTALL_STATUS" != "0" ]; then STATUS=10; fi
           if [ "$START_STATUS" != "0" ]; then STATUS=20; fi
           if [ "$PID_STATUS" != "0" ]; then STATUS=30; fi
@@ -105,12 +115,16 @@ jobs:
 
           {
             echo "STATUS=$STATUS"
+            echo "SDK_STATUS=$SDK_STATUS"
+            echo "AVD_STATUS=$AVD_STATUS"
             echo "BOOTED=$BOOTED"
             echo "INSTALL_STATUS=$INSTALL_STATUS"
             echo "START_STATUS=$START_STATUS"
             echo "PID_STATUS=$PID_STATUS"
             echo "TITLE_STATUS=$TITLE_STATUS"
             echo "DRILL_STATUS=$DRILL_STATUS"
+            echo '--- INSTALL ---'
+            cat runtime-evidence/install.txt
             echo '--- AM START ---'
             cat runtime-evidence/am-start.txt
             echo '--- APP PID ---'
