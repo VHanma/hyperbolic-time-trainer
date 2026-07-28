@@ -1,0 +1,122 @@
+name: Build Hanma Combo Caller X v2.0.1 APK
+
+on:
+  push:
+    branches: [ hanma-arsenal-v2 ]
+    paths:
+      - 'hanma-caller-x/**'
+      - 'tools/hotfix_hanma_caller_x_v201.py'
+      - '.github/workflows/build_hanma_caller_x_v201.yml'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - 'hanma-caller-x/**'
+      - 'tools/hotfix_hanma_caller_x_v201.py'
+      - '.github/workflows/build_hanma_caller_x_v201.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Rehydrate Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat hanma-caller-x/payload.part* > /tmp/hanma-caller-x.b64
+          test "$(wc -c < /tmp/hanma-caller-x.b64)" -eq 27084
+          base64 --decode /tmp/hanma-caller-x.b64 > /tmp/hanma-caller-x.tgz
+          echo 'ca390d0a1ff05f918c35efeef8b3e48f2e8bbf400edfb5a607ce9d6f49448e81  /tmp/hanma-caller-x.tgz' | sha256sum -c -
+          tar -xzf /tmp/hanma-caller-x.tgz -C hanma-caller-x
+
+      - name: Apply startup hotfix
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/hotfix_hanma_caller_x_v201.py
+          ! grep -q 'computeIfAbsent\|getOrDefault' hanma-caller-x/app/src/main/java/com/vhanma/hanmacallerx/MainActivity.java
+          grep -q 'android.intent.action.TTS_SERVICE' hanma-caller-x/app/src/main/AndroidManifest.xml
+          grep -q 'versionCode 21' hanma-caller-x/app/build.gradle
+
+      - name: Verify 2,198-drill library
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(grep -cve '^[[:space:]]*$' hanma-caller-x/app/src/main/assets/fighter_seeds.tsv)" -eq 131
+          test "$(grep -cve '^[[:space:]]*$' combo-caller/app/src/main/assets/combos_codes.txt)" -eq 400
+          test "$(grep -cve '^[[:space:]]*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          cd hanma-caller-x
+          /tmp/gradle-dist/gradle-8.2/bin/gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+
+      - name: Build release APK
+        shell: bash
+        run: |
+          set -o pipefail
+          cd hanma-caller-x
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/hanma-caller-x-v201-build.log
+
+      - name: Upload compiler diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-caller-x-v201-build-log
+          path: /tmp/hanma-caller-x-v201-build.log
+          retention-days: 14
+
+      - name: Verify and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK=dist/Hanma-Combo-Caller-X-v2.0.1-SIGNED.apk
+          cp hanma-caller-x/app/build/outputs/apk/release/app-release.apk "$APK"
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BUILD_TOOLS/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
+          grep -q "versionCode='21'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionName='2.0.1-Hotfix'" dist/APK-BADGING-REPORT.txt
+          if grep -q 'uses-permission:' dist/APK-BADGING-REPORT.txt; then
+            echo 'Caller unexpectedly requests a permission'
+            exit 1
+          fi
+          unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
+          sha256sum "$APK" > dist/Hanma-Combo-Caller-X-v2.0.1-SHA256.txt
+          cat > dist/BUILD-REPORT.txt <<'REPORT'
+          HANMA COMBO CALLER X V2.0.1 HOTFIX
+          Package: com.vhanma.hanmacallerx
+          Total callable drills: 2,198
+          Startup TTS constructor race: fixed
+          Android 6 Map API crash: fixed
+          Android 11 TTS service query: added
+          Runtime permissions: none
+          REPORT
+          (cd hanma-caller-x && zip -qr ../dist/Hanma-Combo-Caller-X-v2.0.1-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
+
+      - name: Upload final package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-combo-caller-x-v201
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
