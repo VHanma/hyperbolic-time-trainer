@@ -6,6 +6,11 @@ on:
     paths:
       - 'hanma-caller-x/**'
       - '.github/workflows/build_hanma_caller_x.yml'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - 'hanma-caller-x/**'
+      - '.github/workflows/build_hanma_caller_x.yml'
   workflow_dispatch:
 
 permissions:
@@ -35,7 +40,6 @@ jobs:
           test "$(grep -cve '^[[:space:]]*$' hanma-caller-x/app/src/main/assets/fighter_seeds.tsv)" -eq 131
           test "$(grep -cve '^[[:space:]]*$' combo-caller/app/src/main/assets/combos_codes.txt)" -eq 400
           test "$(grep -cve '^[[:space:]]*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
-          test "$(grep -c 'lib(\"' /dev/null 2>/dev/null || true)" -eq 0
           echo 'Legacy slots: 898'
           echo 'Seed records: 130'
           echo 'Runtime-expanded fighter and strategy drills: 1,300'
