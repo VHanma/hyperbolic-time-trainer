@@ -29,7 +29,10 @@ jobs:
         run: |
           set -euo pipefail
           cat hanma-caller-x/payload.part* > /tmp/hanma-caller-x.b64
-          base64 --decode /tmp/hanma-caller-x.b64 | tar -xz -C hanma-caller-x
+          test "$(wc -c < /tmp/hanma-caller-x.b64)" -eq 27084
+          base64 --decode /tmp/hanma-caller-x.b64 > /tmp/hanma-caller-x.tgz
+          echo 'ca390d0a1ff05f918c35efeef8b3e48f2e8bbf400edfb5a607ce9d6f49448e81  /tmp/hanma-caller-x.tgz' | sha256sum -c -
+          tar -xzf /tmp/hanma-caller-x.tgz -C hanma-caller-x
           test -f hanma-caller-x/app/src/main/java/com/vhanma/hanmacallerx/MainActivity.java
           test -f hanma-caller-x/app/src/main/assets/fighter_seeds.tsv
 
