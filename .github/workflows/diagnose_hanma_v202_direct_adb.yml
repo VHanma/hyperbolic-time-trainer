@@ -57,16 +57,29 @@ jobs:
           SDK_STATUS=$?
           echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name hanma36 --package "system-images;android-36;google_apis;x86_64" --device "pixel_6" >> runtime-evidence/sdkmanager.log 2>&1
           AVD_STATUS=$?
-          "$ANDROID_HOME/emulator/emulator" -avd hanma36 -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none > runtime-evidence/emulator.log 2>&1 &
+
+          adb kill-server > runtime-evidence/adb-server.txt 2>&1 || true
+          adb start-server >> runtime-evidence/adb-server.txt 2>&1
+          "$ANDROID_HOME/emulator/emulator" -avd hanma36 -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data -no-metrics -gpu swiftshader_indirect -camera-back none -camera-front none > runtime-evidence/emulator.log 2>&1 &
           EMULATOR_PID=$!
           echo "$EMULATOR_PID" > runtime-evidence/emulator-host-pid.txt
-          adb wait-for-device > runtime-evidence/adb-wait.txt 2>&1
-          BOOTED=0
+
+          DEVICE_READY=0
           for i in $(seq 1 180); do
-            VALUE=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
-            if [ "$VALUE" = "1" ]; then BOOTED=1; break; fi
+            STATE=$(adb -s emulator-5554 get-state 2>/dev/null | tr -d '\r')
+            if [ "$STATE" = "device" ]; then DEVICE_READY=1; break; fi
             sleep 2
           done
+          echo "$DEVICE_READY" > runtime-evidence/device-ready.txt
+
+          BOOTED=0
+          if [ "$DEVICE_READY" = "1" ]; then
+            for i in $(seq 1 180); do
+              VALUE=$(adb -s emulator-5554 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+              if [ "$VALUE" = "1" ]; then BOOTED=1; break; fi
+              sleep 2
+            done
+          fi
           echo "$BOOTED" > runtime-evidence/booted.txt
           if [ "$BOOTED" != "1" ]; then
             echo 90 > runtime-evidence/status.txt
@@ -74,30 +87,35 @@ jobs:
               echo "STATUS=90"
               echo "SDK_STATUS=$SDK_STATUS"
               echo "AVD_STATUS=$AVD_STATUS"
+              echo "DEVICE_READY=$DEVICE_READY"
               echo "BOOTED=$BOOTED"
-              echo '--- AVD FILES ---'
-              find "$ANDROID_AVD_HOME" -maxdepth 3 -type f -print
+              echo '--- ADB DEVICES ---'
+              adb devices -l
+              echo '--- ADB SERVER ---'
+              cat runtime-evidence/adb-server.txt
               echo '--- EMULATOR LOG ---'
-              tail -n 160 runtime-evidence/emulator.log
+              tail -n 180 runtime-evidence/emulator.log
             } > runtime-evidence/result-summary.txt
             cat runtime-evidence/result-summary.txt
+            kill "$EMULATOR_PID" >/dev/null 2>&1 || true
             exit 0
           fi
 
+          ADB="adb -s emulator-5554"
           APK=runtime-evidence/Hanma-Combo-Caller-X-v2.0.2.apk
           PKG=com.vhanma.hanmacallerx
-          adb install -r "$APK" > runtime-evidence/install.txt 2>&1
+          $ADB install -r "$APK" > runtime-evidence/install.txt 2>&1
           INSTALL_STATUS=$?
-          adb shell am force-stop "$PKG" >/dev/null 2>&1
-          adb logcat -c
-          adb shell am start -W -n "$PKG/.MainActivity" > runtime-evidence/am-start.txt 2>&1
+          $ADB shell am force-stop "$PKG" >/dev/null 2>&1
+          $ADB logcat -c
+          $ADB shell am start -W -n "$PKG/.MainActivity" > runtime-evidence/am-start.txt 2>&1
           START_STATUS=$?
           sleep 15
-          adb logcat -d > runtime-evidence/logcat.txt 2>&1
-          adb shell pidof "$PKG" > runtime-evidence/app-pid.txt 2>&1
+          $ADB logcat -d > runtime-evidence/logcat.txt 2>&1
+          $ADB shell pidof "$PKG" > runtime-evidence/app-pid.txt 2>&1
           PID_STATUS=$?
-          adb shell uiautomator dump /sdcard/hanma-window.xml > runtime-evidence/uiautomator.txt 2>&1
-          adb pull /sdcard/hanma-window.xml runtime-evidence/window.xml >> runtime-evidence/uiautomator.txt 2>&1
+          $ADB shell uiautomator dump /sdcard/hanma-window.xml > runtime-evidence/uiautomator.txt 2>&1
+          $ADB pull /sdcard/hanma-window.xml runtime-evidence/window.xml >> runtime-evidence/uiautomator.txt 2>&1
           grep -q 'HANMA COMBO CALLER X' runtime-evidence/window.xml
           TITLE_STATUS=$?
           grep -q '2,198 CALLABLE DRILLS' runtime-evidence/window.xml
@@ -117,6 +135,7 @@ jobs:
             echo "STATUS=$STATUS"
             echo "SDK_STATUS=$SDK_STATUS"
             echo "AVD_STATUS=$AVD_STATUS"
+            echo "DEVICE_READY=$DEVICE_READY"
             echo "BOOTED=$BOOTED"
             echo "INSTALL_STATUS=$INSTALL_STATUS"
             echo "START_STATUS=$START_STATUS"
