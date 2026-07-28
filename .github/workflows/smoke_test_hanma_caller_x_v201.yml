@@ -6,6 +6,10 @@ on:
     branches: [ hanma-arsenal-v2 ]
     paths:
       - '.github/workflows/smoke_test_hanma_caller_x_v201.yml'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/smoke_test_hanma_caller_x_v201.yml'
 
 permissions:
   contents: read
