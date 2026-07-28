@@ -1,0 +1,139 @@
+name: Diagnose Hanma Caller v2.0.2 Direct ADB
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ hanma-arsenal-v2 ]
+    paths:
+      - '.github/workflows/diagnose_hanma_v202_direct_adb.yml'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - '.github/workflows/diagnose_hanma_v202_direct_adb.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build v2.0.2 quietly
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime-evidence
+          cat hanma-caller-x/payload.part* > /tmp/hanma-caller-x.b64
+          base64 --decode /tmp/hanma-caller-x.b64 > /tmp/hanma-caller-x.tgz
+          tar -xzf /tmp/hanma-caller-x.tgz -C hanma-caller-x
+          python tools/hotfix_hanma_caller_x_v201.py > runtime-evidence/patch.log 2>&1
+          python tools/hotfix_hanma_caller_x_v202.py >> runtime-evidence/patch.log 2>&1
+          curl -fsSL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          cd hanma-caller-x
+          /tmp/gradle-dist/gradle-8.2/bin/gradle wrapper --gradle-version 8.2 > ../runtime-evidence/gradle.log 2>&1
+          chmod +x gradlew
+          ./gradlew --no-daemon clean assembleRelease >> ../runtime-evidence/gradle.log 2>&1
+          cp app/build/outputs/apk/release/app-release.apk ../runtime-evidence/Hanma-Combo-Caller-X-v2.0.2.apk
+
+      - name: Install Android 16 emulator quietly
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime-evidence
+          sudo chmod 666 /dev/kvm || true
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --licenses > runtime-evidence/sdkmanager.log 2>&1 || true
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platform-tools" "emulator" "system-images;android-36;google_apis;x86_64" >> runtime-evidence/sdkmanager.log 2>&1
+          echo no | "$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager" create avd --force --name hanma36 --package "system-images;android-36;google_apis;x86_64" --device "pixel_6" >> runtime-evidence/sdkmanager.log 2>&1
+
+      - name: Boot, launch, and capture exact result
+        shell: bash
+        run: |
+          set +e
+          mkdir -p runtime-evidence
+          "$ANDROID_HOME/emulator/emulator" -avd hanma36 -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none -camera-front none > runtime-evidence/emulator.log 2>&1 &
+          EMULATOR_PID=$!
+          echo "$EMULATOR_PID" > runtime-evidence/emulator-host-pid.txt
+          adb wait-for-device > runtime-evidence/adb-wait.txt 2>&1
+          BOOTED=0
+          for i in $(seq 1 180); do
+            VALUE=$(adb shell getprop sys.boot_completed 2>/dev/null | tr -d '\r')
+            if [ "$VALUE" = "1" ]; then BOOTED=1; break; fi
+            sleep 2
+          done
+          echo "$BOOTED" > runtime-evidence/booted.txt
+          if [ "$BOOTED" != "1" ]; then
+            echo 90 > runtime-evidence/status.txt
+            tail -n 120 runtime-evidence/emulator.log > runtime-evidence/result-summary.txt
+            exit 0
+          fi
+
+          APK=runtime-evidence/Hanma-Combo-Caller-X-v2.0.2.apk
+          PKG=com.vhanma.hanmacallerx
+          adb install -r "$APK" > runtime-evidence/install.txt 2>&1
+          INSTALL_STATUS=$?
+          adb shell am force-stop "$PKG" >/dev/null 2>&1
+          adb logcat -c
+          adb shell am start -W -n "$PKG/.MainActivity" > runtime-evidence/am-start.txt 2>&1
+          START_STATUS=$?
+          sleep 15
+          adb logcat -d > runtime-evidence/logcat.txt 2>&1
+          adb shell pidof "$PKG" > runtime-evidence/app-pid.txt 2>&1
+          PID_STATUS=$?
+          adb shell uiautomator dump /sdcard/hanma-window.xml > runtime-evidence/uiautomator.txt 2>&1
+          adb pull /sdcard/hanma-window.xml runtime-evidence/window.xml >> runtime-evidence/uiautomator.txt 2>&1
+          grep -q 'HANMA COMBO CALLER X' runtime-evidence/window.xml
+          TITLE_STATUS=$?
+          grep -q '2,198 CALLABLE DRILLS' runtime-evidence/window.xml
+          DRILL_STATUS=$?
+
+          STATUS=0
+          if [ "$INSTALL_STATUS" != "0" ]; then STATUS=10; fi
+          if [ "$START_STATUS" != "0" ]; then STATUS=20; fi
+          if [ "$PID_STATUS" != "0" ]; then STATUS=30; fi
+          if [ "$TITLE_STATUS" != "0" ]; then STATUS=40; fi
+          if [ "$DRILL_STATUS" != "0" ]; then STATUS=50; fi
+          echo "$STATUS" > runtime-evidence/status.txt
+
+          {
+            echo "STATUS=$STATUS"
+            echo "BOOTED=$BOOTED"
+            echo "INSTALL_STATUS=$INSTALL_STATUS"
+            echo "START_STATUS=$START_STATUS"
+            echo "PID_STATUS=$PID_STATUS"
+            echo "TITLE_STATUS=$TITLE_STATUS"
+            echo "DRILL_STATUS=$DRILL_STATUS"
+            echo '--- AM START ---'
+            cat runtime-evidence/am-start.txt
+            echo '--- APP PID ---'
+            cat runtime-evidence/app-pid.txt
+            echo '--- ANDROID RUNTIME / FATAL ---'
+            grep -E -A 30 -B 8 'FATAL EXCEPTION|AndroidRuntime|Process: com.vhanma.hanmacallerx|Unable to start activity|VerifyError|NoClassDefFoundError|Resources.NotFoundException' runtime-evidence/logcat.txt | tail -n 180
+          } > runtime-evidence/result-summary.txt
+          cat runtime-evidence/result-summary.txt
+          kill "$EMULATOR_PID" >/dev/null 2>&1 || true
+          exit 0
+
+      - name: Upload all diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-v202-direct-adb-evidence
+          path: runtime-evidence/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Require real Android launch proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat runtime-evidence/result-summary.txt
+          test "$(cat runtime-evidence/status.txt)" = "0"
