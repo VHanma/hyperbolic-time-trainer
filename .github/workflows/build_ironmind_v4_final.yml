@@ -1,0 +1,161 @@
+name: Build Iron Mind V4.4 Immersive Flash Chamber APK
+
+on:
+  push:
+    branches: [ master, v4-hyperbolic-chamber ]
+  pull_request:
+    branches: [ master ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-final:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Materialize V4.4 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .ironmind_payload/new/p* > /tmp/ironmind_payload.b64
+          base64 --decode /tmp/ironmind_payload.b64 > /tmp/ironmind_v4_project.tar.gz
+          tar -xzf /tmp/ironmind_v4_project.tar.gz -C "$GITHUB_WORKSPACE"
+          mkdir -p app/src/main/java/com/htt
+          cat .ironmind_patch/v43/SpeechEngine.part* > app/src/main/java/com/htt/SpeechEngine.java
+          cp .ironmind_patch/v43/AndroidManifest.xml app/src/main/AndroidManifest.xml
+          cp .ironmind_patch/StrikeTracker-LiveForge.java app/src/main/java/com/htt/StrikeTracker.java
+          cp .ironmind_patch/HudView-LiveForge.java app/src/main/java/com/htt/HudView.java
+
+          cat \
+            .ironmind_patch/v44/p00 \
+            .ironmind_patch/v44/p01_00 \
+            .ironmind_patch/v44/p01_01 \
+            .ironmind_patch/v44/p01_02 \
+            .ironmind_patch/v44/p02_00 \
+            .ironmind_patch/v44/p02_01 > /tmp/v44-patch.b64
+          cat \
+            .ironmind_patch/v44/h00 \
+            .ironmind_patch/v44/h01 \
+            .ironmind_patch/v44/h02 \
+            .ironmind_patch/v44/h03 \
+            .ironmind_patch/v44/h04 \
+            .ironmind_patch/v44/h05 \
+            .ironmind_patch/v44/h06 | xxd -r -p >> /tmp/v44-patch.b64
+
+          test "$(wc -c < /tmp/v44-patch.b64)" -eq 29192
+          echo "81cd9bf6fbb7ea810cdc194f3c195e91f710f481436e53783b49366a8dadadfa  /tmp/v44-patch.b64" | sha256sum -c -
+          base64 --decode /tmp/v44-patch.b64 > /tmp/v44-patch.tar.gz
+          echo "7f19506b6475425bf2cdbe1dfc852265d55554e6733f8c3b7ce54c0c91a8212b  /tmp/v44-patch.tar.gz" | sha256sum -c -
+          tar -tzf /tmp/v44-patch.tar.gz > /tmp/v44-files.txt
+          tar -xzf /tmp/v44-patch.tar.gz -C "$GITHUB_WORKSPACE"
+          sed -i 's/versionCode 7/versionCode 8/' app/build.gradle
+          sed -i 's/versionName "4.3-DeepPassive-AdjustableRepeats"/versionName "4.4-ImmersiveFlash-PositiveLanguage"/' app/build.gradle
+
+          grep -q 'enterPassiveFullscreen' app/src/main/java/com/htt/MainActivity.java
+          grep -q 'FLASHES PER MESSAGE' app/src/main/java/com/htt/MainActivity.java
+          grep -q 'Full-screen affirmation pulse' app/src/main/java/com/htt/MainActivity.java
+          grep -q 'present(String cue, String symbol, String delivery, int durationMs, int flashCount, int intensityPercent)' app/src/main/java/com/htt/DeepEmbedView.java
+          grep -q 'versionCode 8' app/build.gradle
+          python - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path('app/src/main/java/com/htt/DeepMessageBank.java').read_text()
+          blocked = re.compile(r"\b(?:don't|dont|do\s+not|no|not|won't|wont|never|can't|cant|cannot)\b", re.I)
+          bad = [line.strip() for line in text.splitlines() if 'add(' in line and blocked.search(line)]
+          if bad:
+              raise SystemExit('Blocked negative wording remains in affirmation entries:\n' + '\n'.join(bad))
+          PY
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.2 wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          /tmp/gradle-dist/gradle-8.2/bin/gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+
+      - name: Build release APK
+        shell: bash
+        run: |
+          set +e
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/gradle-build.log
+          status=${PIPESTATUS[0]}
+          grep -nE "(^| )error:|FAILURE:|What went wrong:|Execution failed|Could not resolve|Caused by:" /tmp/gradle-build.log | tail -240 > /tmp/concise-build-errors.txt || true
+          exit "$status"
+
+      - name: Upload compiler diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ironmind-v4-immersive-flash-build-log
+          path: |
+            /tmp/gradle-build.log
+            /tmp/concise-build-errors.txt
+            /tmp/v44-files.txt
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Verify and package deliverables
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK=dist/IronMind-Hyperbolic-Chamber-v4.4-ImmersiveFlash-PositiveLanguage.apk
+          cp app/build/outputs/apk/release/app-release.apk "$APK"
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BUILD_TOOLS/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
+          if grep -Eq "android.permission.(INTERNET|ACCESS_NETWORK_STATE|WAKE_LOCK|RECEIVE_BOOT_COMPLETED|FOREGROUND_SERVICE)'" dist/APK-BADGING-REPORT.txt; then
+            echo "Unexpected network/background permission found in final APK"
+            exit 1
+          fi
+          sha256sum "$APK" > dist/IronMind-Hyperbolic-Chamber-v4.4-ImmersiveFlash-PositiveLanguage-SHA256.txt
+          cat > dist/BUILD-REPORT.txt <<'REPORT'
+          IRON MIND V4.4: IMMERSIVE FLASH CHAMBER + POSITIVE LANGUAGE
+          Package: com.vhanma.ironmindv4
+          Version: 4.4-ImmersiveFlash-PositiveLanguage (code 8)
+          Minimum Android: 6.0 / API 23
+          Target Android: API 34
+          Signing: Android debug signing
+          Requested runtime permissions: camera and vibration only
+
+          PASSIVE FULL-SCREEN SESSION
+          START hides the settings panel, status bar and navigation bar.
+          Session view contains the visual engine plus a small STOP control.
+          A screen tap reveals the timer and current mode briefly.
+
+          AFFIRMATION FLASH ENGINE
+          Delivery options include full-screen affirmation pulse, triple affirmation burst, edge prime storm, symbol-word alternation and masked burst stack.
+          Flashes per message: 1, 3, 5 or 8.
+          Flashed text: reflex commands, full affirmations or alternating.
+          Flash intensity: 10% to 90%.
+          Full-field pulses remain below three pulses per second.
+
+          LANGUAGE FILTER
+          Affirmation entries exclude don't, do not, no, not, won't, never, can't and related variants.
+
+          PRESERVED SYSTEMS
+          Natural Coach, Deep Embed, Visual Threshold Lab, Peripheral Symbol, Sleep Consolidation and Fringe Laboratory remain included.
+          Adjustable combo repetition, Live Forge, Fusion Chamber, audio layers, haptics, carriers, torch laboratory and delivery logs remain included.
+          REPORT
+          zip -qr dist/IronMind-Hyperbolic-Chamber-v4.4-ImmersiveFlash-PositiveLanguage-Source.zip app build.gradle settings.gradle README.md .github .ironmind_patch
+
+      - name: Upload final APK and source
+        uses: actions/upload-artifact@v4
+        with:
+          name: ironmind-hyperbolic-v4-immersive-flash-final
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30

@@ -1,0 +1,176 @@
+rofiles);
+        Spinner duration = spinner(new String[]{"5 minutes", "10 minutes", "20 minutes", "30 minutes", "60 minutes"});
+        Spinner interval = spinner(new String[]{"4 seconds", "6.5 seconds", "8 seconds", "12 seconds", "20 seconds"});
+        Spinner torchSpinner = spinner(new String[]{"Torch off", "Torch pulse 1 Hz", "Torch pulse 2 Hz", "Torch pulse 4 Hz"});
+
+        CheckBox clearCoach = check("Occasional clear natural coach", true);
+        CheckBox quiet = check("Lower-volume intelligible reinforcement", true);
+        CheckBox texture = check("Fast texture voice beneath the whisper", true);
+        CheckBox reverse = check("Reverse word order in experimental texture", false);
+        CheckBox haptic = check("Stable haptic anchor on each cue", true);
+        CheckBox golden = check("Golden-ratio spacing variation", true);
+        CheckBox reveal = check("Reveal every delivered message after the session", true);
+
+        addLabeled(panel, "PASSIVE MODE", mode);
+        addLabeled(panel, "MESSAGE SYSTEM", category);
+        addLabeled(panel, "BRIEF VISUAL DELIVERY", visualDelivery);
+        addLabeled(panel, "AMBIENT SCREEN PROFILE", ambientVisual);
+        addLabeled(panel, "AUDIO CARRIER", audio);
+        addLabeled(panel, "REAR TORCH LAB", torchSpinner);
+        addLabeled(panel, "SESSION", duration);
+        addLabeled(panel, "BASE MESSAGE SPACING", interval);
+
+        TextView thresholdLabel = text("Brief cue duration: 67 ms", 14, 0xFFD7E0EA, true);
+        SeekBar threshold = seek(67, 17, 300);
+        threshold.setOnSeekBarChangeListener(simpleSeek(value -> thresholdLabel.setText("Brief cue duration: " + Math.max(17, value) + " ms")));
+        panel.addView(thresholdLabel, fullWrap(10));
+        panel.addView(threshold, fullWrap(0));
+
+        TextView coachVolumeLabel = text("Coach volume: 90%", 14, 0xFFD7E0EA, true);
+        SeekBar coachVolume = seek(90, 0, 100);
+        coachVolume.setOnSeekBarChangeListener(simpleSeek(value -> coachVolumeLabel.setText("Coach volume: " + value + "%")));
+        TextView whisperVolumeLabel = text("Whisper volume: 14%", 14, 0xFFD7E0EA, true);
+        SeekBar whisperVolume = seek(14, 0, 50);
+        whisperVolume.setOnSeekBarChangeListener(simpleSeek(value -> whisperVolumeLabel.setText("Whisper volume: " + value + "%")));
+        TextView textureVolumeLabel = text("Texture volume: 5%", 14, 0xFFD7E0EA, true);
+        SeekBar textureVolume = seek(5, 0, 30);
+        textureVolume.setOnSeekBarChangeListener(simpleSeek(value -> textureVolumeLabel.setText("Texture volume: " + value + "%")));
+        panel.addView(coachVolumeLabel, fullWrap(10)); panel.addView(coachVolume, fullWrap(0));
+        panel.addView(whisperVolumeLabel, fullWrap(6)); panel.addView(whisperVolume, fullWrap(0));
+        panel.addView(textureVolumeLabel, fullWrap(6)); panel.addView(textureVolume, fullWrap(0));
+
+        panel.addView(clearCoach, fullWrap(8));
+        panel.addView(quiet, fullWrap(2));
+        panel.addView(texture, fullWrap(2));
+        panel.addView(reverse, fullWrap(2));
+        panel.addView(haptic, fullWrap(2));
+        panel.addView(golden, fullWrap(2));
+        panel.addView(reveal, fullWrap(2));
+
+        deepEmbedView = new DeepEmbedView(this);
+        LinearLayout.LayoutParams embedLp = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, dp(245));
+        embedLp.topMargin = dp(14);
+        panel.addView(deepEmbedView, embedLp);
+
+        passiveCueText = text("READY", 20, Color.WHITE, true);
+        passiveCueText.setGravity(Gravity.CENTER);
+        passiveCueText.setBackground(round(0xCC0B1118, 16, 0xFF31485C));
+        passiveCueText.setPadding(dp(12), dp(16), dp(12), dp(16));
+        panel.addView(passiveCueText, fullWrap(10));
+        sessionClock = text("00:00", 18, 0xFF74E5FF, true);
+        sessionClock.setGravity(Gravity.CENTER);
+        panel.addView(sessionClock, fullWrap(8));
+
+        LinearLayout buttons = horizontal(8);
+        Button start = actionButton("START");
+        Button stop = actionButton("STOP");
+        Button log = actionButton("LOG");
+        buttons.addView(start, weight()); buttons.addView(stop, weight()); buttons.addView(log, weight());
+        panel.addView(buttons, fullWrap(14));
+        panel.addView(actionButtonWith("BACK", this::showHome), fullWrap(8));
+
+        start.setOnClickListener(v -> {
+            stopSessionOnly();
+            passiveMode = (String) mode.getSelectedItem();
+            passiveCategory = (String) category.getSelectedItem();
+            passiveVisualDelivery = (String) visualDelivery.getSelectedItem();
+            passiveCoachEnabled = clearCoach.isChecked();
+            passiveWhisperEnabled = quiet.isChecked();
+            passiveTextureEnabled = texture.isChecked();
+            passiveReverseTexture = reverse.isChecked();
+            passiveHapticEnabled = haptic.isChecked();
+            passiveGoldenTiming = golden.isChecked();
+            passiveRevealAtEnd = reveal.isChecked();
+            passiveCueDurationMs = Math.max(17, threshold.getProgress());
+            passiveBaseIntervalMs = (int) (parseLeadingDouble((String) interval.getSelectedItem(), 6.5) * 1000);
+            speech.setCoachVolume(coachVolume.getProgress() / 100f);
+            speech.setWhisperVolume(whisperVolume.getProgress() / 100f);
+            speech.setTextureVolume(textureVolume.getProgress() / 100f);
+            int mins = parseLeadingInt((String) duration.getSelectedItem(), 10);
+            sessionStartedMs = System.currentTimeMillis();
+            sessionEndsMs = sessionStartedMs + mins * 60_000L;
+            passiveCycle = 0;
+            passiveLog.clear();
+            combosCalled = combosCompleted = 0;
+            strobeView.startProfile((String) ambientVisual.getSelectedItem());
+            tones.start((String) audio.getSelectedItem(), 0.075f);
+            startTorchFromSelection((String) torchSpinner.getSelectedItem());
+            passiveCueText.setText(passiveMode.toUpperCase(Locale.US) + " ACTIVE");
+            passiveDeepLoop();
+            clockLoop();
+        });
+        stop.setOnClickListener(v -> {
+            finishSession("passive-deep-forge");
+            passiveCueText.setText("STOPPED");
+            if (passiveRevealAtEnd) showPassiveLogDialog();
+        });
+        log.setOnClickListener(v -> showPassiveLogDialog());
+    }
+
+    private void passiveDeepLoop() {
+        if (sessionEndsMs <= System.currentTimeMillis() || currentMode != MODE_PASSIVE) {
+            finishSession("passive-deep-forge");
+            if (passiveCueText != null) passiveCueText.setText("SESSION COMPLETE");
+            if (passiveRevealAtEnd) showPassiveLogDialog();
+            return;
+        }
+        passiveCycle++;
+        DeepMessageBank.Message m = deepMessages.random(passiveCategory);
+        String delivery = passiveVisualDelivery;
+        int cueMs = passiveCueDurationMs;
+        boolean natural = passiveMode.equals("Natural Coach");
+        boolean threshold = passiveMode.equals("Visual Threshold Lab");
+        boolean peripheral = passiveMode.equals("Peripheral Symbol");
+        boolean sleep = passiveMode.equals("Sleep Consolidation");
+        boolean fringe = passiveMode.equals("Fringe Laboratory");
+
+        if (natural) { delivery = "Visible card"; cueMs = 1200; }
+        else if (peripheral) delivery = "Peripheral prime";
+        else if (sleep) delivery = "Symbol only";
+        else if (threshold && !delivery.toLowerCase(Locale.US).contains("mask")) delivery = "Borderline + mask";
+        else if (fringe && delivery.equals("Visible card")) delivery = "Low contrast texture";
+
+        if (deepEmbedView != null) deepEmbedView.present(m.reflex, m.symbol, delivery, cueMs);
+        if (passiveCueText != null) {
+            if (natural) passiveCueText.setText(m.coach);
+            else if (threshold) passiveCueText.setText("THRESHOLD TRIAL  •  " + cueMs + " ms");
+            else if (sleep) passiveCueText.setText("SLEEP CONSOLIDATION  •  " + m.symbol);
+            else passiveCueText.setText(passiveMode.toUpperCase(Locale.US) + "  •  " + m.category);
+        }
+
+        float pan = passiveRandom.nextBoolean() ? -0.55f : 0.55f;
+        boolean clearThisCycle = passiveCoachEnabled && (natural || passiveCycle % 3 == 1) && !sleep && !threshold;
+        if (clearThisCycle) {
+            speech.speakCoach(m.coach, 0f);
+            logPassive("CLEAR", m.coach);
+        }
+        if (passiveWhisperEnabled && !threshold) {
+            handler.postDelayed(() -> speech.speakWhisper(m.whisper, pan), 260L);
+            logPassive("WHISPER", m.whisper);
+        }
+        if (passiveTextureEnabled && !threshold) {
+            String texture = passiveReverseTexture || fringe ? DeepMessageBank.reverseWords(m.texture) : m.texture;
+            handler.postDelayed(() -> speech.speakTexture(texture, -pan), 620L);
+            logPassive("TEXTURE", texture);
+        }
+        logPassive("VISUAL " + cueMs + "ms " + delivery, m.reflex + " [" + m.symbol + "]");
+        if (passiveHapticEnabled) playPassiveHaptic(m.symbol);
+
+        int next = passiveBaseIntervalMs;
+        if (passiveGoldenTiming && passiveCycle % 2 == 0) next = (int) (passiveBaseIntervalMs * 1.618);
+        if (sleep) next = Math.max(next, 12000);
+        handler.postDelayed(this::passiveDeepLoop, next);
+    }
+
+    private void logPassive(String layer, String message) {
+        String stamp = String.format(Locale.US, "%02d:%02d", Math.max(0, (System.currentTimeMillis() - sessionStartedMs) / 60_000),
+                Math.max(0, ((System.currentTimeMillis() - sessionStartedMs) / 1000) % 60));
+        passiveLog.add(stamp + "  " + layer + "\n" + message);
+        while (passiveLog.size() > 500) passiveLog.remove(0);
+    }
+
+    private void playPassiveHaptic(String symbol) {
+        try {
+            Vibrator vibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
+            if (vibrator == null || !vibrator.hasVibrator()) return;
+            int hash = Math

@@ -1,0 +1,303 @@
+--- app/src/main/java/com/htt/MainActivity.java
++++ app/src/main/java/com/htt/MainActivity.java
+@@ -64,7 +64,7 @@
+     private static final int MODE_VISION = 3;
+     private static final int MODE_FUSION = 4;
+     private static final int MODE_REPORT = 5;
+-    private static final int COMBO_REPETITIONS = 5;
++    private int comboRepetitions = 5;
+ 
+     private final Handler handler = new Handler(Looper.getMainLooper());
+     private final ExecutorService cameraExecutor = Executors.newSingleThreadExecutor();
+@@ -75,6 +75,7 @@
+     private TorchPulseEngine torch;
+     private SharedPreferences prefs;
+     private StrobeView strobeView;
++    private SubliminalView subliminalView;
+     private int currentMode = MODE_HOME;
+ 
+     private ProcessCameraProvider cameraProvider;
+@@ -188,35 +189,60 @@
+ 
+         strobeView = new StrobeView(this);
+         root.addView(strobeView, match());
++        subliminalView = new SubliminalView(this);
++        root.addView(subliminalView, match());
++
+         ScrollView scroll = new ScrollView(this);
+         LinearLayout panel = vertical(10);
+         panel.setPadding(dp(18), dp(22), dp(18), dp(36));
+         scroll.addView(panel);
+         root.addView(scroll, match());
+-        addHeader(panel, "PASSIVE CHAMBER", "Use while stationary. Clear instruction first; quiet and experimental layers remain secondary.");
++        addHeader(panel, "DEEP PASSIVE FORGE", "Natural coaching, layered speech, masked and peripheral cues, symbolic anchors, carrier audio and experimental timing.");
+ 
+-        Spinner category = spinner(new String[]{"All combat messages"});
++        Spinner mode = spinner(new String[]{
++                "Natural Coach", "Deep Embed", "Masked Visual", "Peripheral Prime",
++                "Low Contrast Texture", "Symbol + Haptic", "Fringe Stack"
++        });
++        Spinner visibility = spinner(new String[]{
++                "Visible 1200 ms", "Glimpsed 180 ms", "Borderline 80 ms", "Masked 40 ms", "Masked 20 ms"
++        });
+         Spinner visual = spinner(visualProfiles);
+         Spinner audio = spinner(audioProfiles);
+-        Spinner duration = spinner(new String[]{"5 minutes", "10 minutes", "20 minutes", "30 minutes"});
++        Spinner duration = spinner(new String[]{"5 minutes", "10 minutes", "20 minutes", "30 minutes", "60 minutes"});
++        Spinner spacing = spinner(new String[]{"Natural varied", "Golden ratio", "Every 5 seconds", "Every 8 seconds", "Every 13 seconds"});
+         Spinner torchSpinner = spinner(new String[]{"Torch off", "Torch pulse 1 Hz", "Torch pulse 2 Hz", "Torch pulse 4 Hz"});
+-        CheckBox audible = check("Audible affirmation layer", true);
+-        CheckBox quiet = check("Lower-volume reinforcement layer", true);
++        CheckBox clear = check("Occasional clear natural coach", true);
++        CheckBox whisper = check("Lower-volume intelligible reinforcement", true);
++        CheckBox texture = check("Ultra-low texture speech", true);
++        CheckBox reverse = check("Experimental reverse word order", false);
++        CheckBox haptic = check("Haptic anchor with each prime", true);
+         CheckBox source = check("Include longer source affirmations", false);
+-        addLabeled(panel, "MESSAGE BANK", category);
+-        addLabeled(panel, "SCREEN PROFILE", visual);
+-        addLabeled(panel, "AUDIO PROFILE", audio);
++
++        SeekBar clearVol = volumeBar(85);
++        SeekBar whisperVol = volumeBar(18);
++        SeekBar textureVol = volumeBar(5);
++        addLabeled(panel, "PASSIVE METHOD", mode);
++        addLabeled(panel, "VISUAL AWARENESS LEVEL", visibility);
++        addLabeled(panel, "BACKGROUND VISUAL", visual);
++        addLabeled(panel, "AUDIO / FREQUENCY PROFILE", audio);
++        addLabeled(panel, "MESSAGE SPACING", spacing);
+         addLabeled(panel, "REAR TORCH LAB", torchSpinner);
+         addLabeled(panel, "SESSION", duration);
+-        panel.addView(audible, fullWrap(4));
+-        panel.addView(quiet, fullWrap(2));
++        panel.addView(clear, fullWrap(4)); addLabeled(panel, "CLEAR VOICE VOLUME", clearVol);
++        panel.addView(whisper, fullWrap(2)); addLabeled(panel, "WHISPER VOLUME", whisperVol);
++        panel.addView(texture, fullWrap(2)); addLabeled(panel, "TEXTURE VOLUME", textureVol);
++        panel.addView(reverse, fullWrap(2));
++        panel.addView(haptic, fullWrap(2));
+         panel.addView(source, fullWrap(2));
+ 
+-        TextView cue = text("READY", 28, Color.WHITE, true);
++        TextView cue = text("READY", 22, Color.WHITE, true);
+         cue.setGravity(Gravity.CENTER);
+         cue.setBackground(round(0xCC0B1118, 16, 0xFF31485C));
+-        cue.setPadding(dp(12), dp(22), dp(12), dp(22));
++        cue.setPadding(dp(12), dp(18), dp(12), dp(18));
+         panel.addView(cue, fullWrap(14));
++        TextView detail = text("Every concealed cue is also shown here afterward so the session remains transparent.", 13, 0xFFA7B4C4, false);
++        detail.setGravity(Gravity.CENTER);
++        panel.addView(detail, fullWrap(6));
+         sessionClock = text("00:00", 18, 0xFF74E5FF, true);
+         sessionClock.setGravity(Gravity.CENTER);
+         panel.addView(sessionClock, fullWrap(8));
+@@ -234,29 +260,103 @@
+             int mins = parseLeadingInt((String) duration.getSelectedItem(), 10);
+             sessionStartedMs = System.currentTimeMillis();
+             sessionEndsMs = sessionStartedMs + mins * 60_000L;
++            speech.setCoachVolume(clearVol.getProgress() / 100f);
++            speech.setWhisperVolume(whisperVol.getProgress() / 100f);
++            speech.setTextureVolume(textureVol.getProgress() / 100f);
+             strobeView.startProfile((String) visual.getSelectedItem());
+-            tones.start((String) audio.getSelectedItem(), 0.09f);
++            tones.start((String) audio.getSelectedItem(), 0.08f);
+             startTorchFromSelection((String) torchSpinner.getSelectedItem());
+-            passiveLoop((String) category.getSelectedItem(), audible.isChecked(), quiet.isChecked(), cue);
++            passiveDeepLoop((String) mode.getSelectedItem(), (String) visibility.getSelectedItem(),
++                    (String) spacing.getSelectedItem(), clear.isChecked(), whisper.isChecked(), texture.isChecked(),
++                    reverse.isChecked(), haptic.isChecked(), cue, detail, 0);
+             clockLoop();
+         });
+         stop.setOnClickListener(v -> {
+-            finishSession("passive");
++            finishSession("deep_passive");
++            if (subliminalView != null) subliminalView.stop();
+             cue.setText("STOPPED");
+         });
+     }
+ 
+-    private void passiveLoop(String category, boolean audible, boolean quiet, TextView cue) {
++    private void passiveDeepLoop(String mode, String visibility, String spacing,
++                                 boolean clear, boolean whisper, boolean texture,
++                                 boolean reverse, boolean haptic, TextView cue, TextView detail, int cycle) {
+         if (sessionEndsMs <= System.currentTimeMillis() || currentMode != MODE_PASSIVE) {
+-            finishSession("passive");
++            finishSession("deep_passive");
++            if (subliminalView != null) subliminalView.stop();
+             cue.setText("SESSION COMPLETE");
+             return;
+         }
+         String message = bank.randomAffirmation(fullSourceAffirmations);
+-        cue.setText(message);
+-        if (audible) speech.speakCoach(message);
+-        if (quiet) handler.postDelayed(() -> speech.speakWhisper(message), 280L);
+-        handler.postDelayed(() -> passiveLoop(category, audible, quiet, cue), 8500L);
++        String compact = compactPrime(message);
++        int durationMs = parseLeadingInt(visibility, 80);
++        String visualMode = mode;
++        if (mode.contains("Masked")) visualMode = "Masked";
++        else if (mode.contains("Peripheral")) visualMode = "Peripheral";
++        else if (mode.contains("Low Contrast")) visualMode = "Low Contrast";
++        else if (mode.contains("Symbol")) visualMode = "Symbol";
++        else if (mode.contains("Fringe")) visualMode = cycle % 3 == 0 ? "Peripheral" : (cycle % 3 == 1 ? "Masked" : "Low Contrast");
++        else visualMode = visibility.startsWith("Visible") ? "Visible" : "Masked";
++
++        if (subliminalView != null) subliminalView.present(compact, visualMode, durationMs);
++        cue.setText(mode + "  |  " + visibility);
++        detail.setText("LAST EMBEDDED MESSAGE:\n" + message);
++
++        if (clear && (cycle % 3 == 0 || mode.contains("Natural"))) speech.speakCoachNatural(naturalize(message), cycle);
++        if (whisper) handler.postDelayed(() -> speech.speakWhisper(message), 450L);
++        if (texture) {
++            String textureText = reverse ? reverseWords(compact) : compact;
++            handler.postDelayed(() -> speech.speakTexture(textureText, mode.contains("Fringe")), 1100L);
++        }
++        if (haptic) cue.performHapticFeedback(android.view.HapticFeedbackConstants.CLOCK_TICK);
++
++        long delay = passiveDelayMs(spacing, cycle);
++        handler.postDelayed(() -> passiveDeepLoop(mode, visibility, spacing, clear, whisper, texture,
++                reverse, haptic, cue, detail, cycle + 1), delay);
++    }
++
++    private String compactPrime(String message) {
++        if (message == null) return "READY";
++        String clean = message.replaceAll("[^A-Za-z0-9 ]", " ").replaceAll("\\s+", " ").trim();
++        String[] words = clean.split(" ");
++        if (words.length <= 4) return clean.toUpperCase(Locale.US);
++        StringBuilder out = new StringBuilder();
++        for (String w : words) {
++            String l = w.toLowerCase(Locale.US);
++            if (l.equals("my") || l.equals("the") || l.equals("and") || l.equals("with") || l.equals("into") || l.equals("from")) continue;
++            if (out.length() > 0) out.append(' ');
++            out.append(w);
++            if (out.toString().split(" ").length >= 4) break;
++        }
++        return out.toString().toUpperCase(Locale.US);
++    }
++
++    private String naturalize(String message) {
++        String[] lead = {"Stay with this. ", "Let the body remember. ", "Quietly notice this. ", "One clean idea. ", "Keep it simple. "};
++        return lead[(int)(System.nanoTime() % lead.length + lead.length) % lead.length] + message;
++    }
++
++    private String reverseWords(String text) {
++        String[] words = text.split(" ");
++        StringBuilder out = new StringBuilder();
++        for (int i = words.length - 1; i >= 0; i--) { if (out.length() > 0) out.append(' '); out.append(words[i]); }
++        return out.toString();
++    }
++
++    private long passiveDelayMs(String spacing, int cycle) {
++        if (spacing.startsWith("Golden")) return cycle % 2 == 0 ? 5200L : 8400L;
++        if (spacing.contains("5")) return 5000L;
++        if (spacing.contains("13")) return 13000L;
++        if (spacing.contains("8")) return 8000L;
++        long[] varied = {5200L, 6800L, 8400L, 6100L, 9900L};
++        return varied[cycle % varied.length];
++    }
++
++    private SeekBar volumeBar(int initial) {
++        SeekBar bar = new SeekBar(this);
++        bar.setMax(100);
++        bar.setProgress(initial);
++        return bar;
+     }
+ 
+     private void showComboCoach() {
+@@ -272,18 +372,21 @@
+         panel.setPadding(dp(16), dp(18), dp(16), dp(28));
+         scroll.addView(panel);
+         root.addView(scroll, match());
+-        addHeader(panel, "NEMESIS COMBO COACH", "Every selected combo repeats five consecutive times before the next one is drawn.");
++        addHeader(panel, "NEMESIS COMBO COACH", "Choose how many times each combo repeats before the next one is drawn.");
+ 
+         Spinner category = spinner(bank.categories().toArray(new String[0]));
+         category.setSelection(bank.categories().indexOf(ComboBank.CAT_MIXED));
+         Spinner duration = spinner(new String[]{"1 minute", "3 minutes", "5 minutes", "10 minutes"});
+         Spinner pace = spinner(new String[]{"8 seconds", "6.5 seconds", "5 seconds", "3.5 seconds"});
++        Spinner repeats = spinner(new String[]{"1 time", "2 times", "3 times", "5 times", "7 times", "10 times", "Until round ends"});
++        repeats.setSelection(3);
+         Spinner visual = spinner(visualProfiles);
+         Spinner audio = spinner(audioProfiles);
+         CheckBox whisper = check("Lower-volume matched affirmations beneath every repetition", true);
+         addLabeled(panel, "COMBO BANK", category);
+         addLabeled(panel, "ROUND", duration);
+         addLabeled(panel, "CALL INTERVAL", pace);
++        addLabeled(panel, "REPEAT EACH COMBO", repeats);
+         addLabeled(panel, "VISUAL PROFILE", visual);
+         addLabeled(panel, "AUDIO PROFILE", audio);
+         panel.addView(whisper, fullWrap(4));
+@@ -311,6 +414,7 @@
+             whisperEnabled = whisper.isChecked();
+             int mins = parseLeadingInt((String) duration.getSelectedItem(), 3);
+             callIntervalMs = (long) (parseLeadingDouble((String) pace.getSelectedItem(), 5) * 1000);
++            comboRepetitions = ((String) repeats.getSelectedItem()).startsWith("Until") ? 9999 : parseLeadingInt((String) repeats.getSelectedItem(), 5);
+             sessionStartedMs = System.currentTimeMillis();
+             sessionEndsMs = sessionStartedMs + mins * 60_000L;
+             combosCalled = combosCompleted = 0;
+@@ -328,7 +432,7 @@
+                 combosCompleted++;
+                 done.performHapticFeedback(android.view.HapticFeedbackConstants.CONFIRM);
+                 if (comboText != null) {
+-                    comboText.setText(currentCombo.spoken + "\n\nREP " + comboRepeatIndex + " / " + COMBO_REPETITIONS + " COMPLETE\n" + densitySummary());
++                    comboText.setText(currentCombo.spoken + "\n\nREP " + comboRepeatIndex + " / " + comboRepetitions + " COMPLETE\n" + densitySummary());
+                 }
+             }
+         });
+@@ -395,9 +499,12 @@
+         category.setSelection(bank.categories().indexOf(ComboBank.CAT_MIXED));
+         Spinner visual = spinner(new String[]{"Off", "Occlusion 10Hz / 70% open", "Occlusion 8Hz / 60% open", "Occlusion 7Hz / 55% open", "Occlusion 5Hz / 50% open", "Temporal 4Hz low contrast"});
+         Spinner audio = spinner(audioProfiles);
++        Spinner repeats = spinner(new String[]{"1 time", "2 times", "3 times", "5 times", "7 times", "10 times"});
++        repeats.setSelection(3);
+         bottom.addView(category, fullWrap(0));
+         bottom.addView(visual, fullWrap(2));
+         bottom.addView(audio, fullWrap(2));
++        bottom.addView(repeats, fullWrap(2));
+         LinearLayout row = horizontal(8);
+         Button start = smallButton("START FUSION");
+         Button stop = smallButton("STOP");
+@@ -410,6 +517,7 @@
+             activeCategory = (String) category.getSelectedItem();
+             whisperEnabled = true;
+             callIntervalMs = 6500L;
++            comboRepetitions = parseLeadingInt((String) repeats.getSelectedItem(), 5);
+             sessionStartedMs = System.currentTimeMillis();
+             sessionEndsMs = sessionStartedMs + 3 * 60_000L;
+             combosCalled = combosCompleted = 0;
+@@ -433,7 +541,7 @@
+             if (hudView != null) hudView.setComboPrompt("ROUND COMPLETE", densitySummary());
+             return;
+         }
+-        if (currentCombo == null || comboRepeatIndex >= COMBO_REPETITIONS) {
++        if (currentCombo == null || comboRepeatIndex >= comboRepetitions) {
+             currentCombo = bank.randomCombo(activeCategory);
+             comboRepeatIndex = 0;
+         }
+@@ -442,8 +550,8 @@
+         currentRepetitionCompleted = false;
+         combosCalled++;
+         String call = currentCombo.spoken;
+-        String repeatLabel = "REP " + comboRepeatIndex + " / " + COMBO_REPETITIONS;
+-        speech.speakCoach("Repeat " + comboRepeatIndex + " of " + COMBO_REPETITIONS + ". " + call);
++        String repeatLabel = "REP " + comboRepeatIndex + " / " + comboRepetitions;
++        speech.speakCoach("Repeat " + comboRepeatIndex + " of " + comboRepetitions + ". " + call);
+         if (whisperEnabled) {
+             handler.postDelayed(() -> {
+                 if (sessionEndsMs > System.currentTimeMillis()) speech.speakWhisper(bank.matchedAffirmation(currentCombo));
+@@ -470,7 +578,7 @@
+                     }
+                 }
+             }
+-            hudView.setComboPrompt(currentCombo.spoken, "REP " + comboRepeatIndex + " / " + COMBO_REPETITIONS + "  |  " + expectedProgress());
++            hudView.setComboPrompt(currentCombo.spoken, "REP " + comboRepeatIndex + " / " + comboRepetitions + "  |  " + expectedProgress());
+         }
+     }
+ 
+@@ -686,6 +794,7 @@
+         tones.stop();
+         torch.stop();
+         if (strobeView != null) strobeView.stop();
++        if (subliminalView != null) subliminalView.stop();
+         sessionEndsMs = 0;
+         sessionStartedMs = 0;
+         currentCombo = null;
