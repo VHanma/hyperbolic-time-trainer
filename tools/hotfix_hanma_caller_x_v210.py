@@ -15,6 +15,12 @@ if len(parts) != 7:
 payload = "".join(p.read_text(encoding="utf-8").strip() for p in parts)
 source = gzip.decompress(base64.b64decode(payload)).decode("utf-8")
 
+bad_preview = 'preview.setText(modeDescription(selected) + "\n\n" + lib + " • " + diff + " • " + total + " available");'
+good_preview = 'preview.setText(modeDescription(selected) + "\\n\\n" + lib + " • " + diff + " • " + total + " available");'
+if bad_preview not in source:
+    raise SystemExit("Mode preview newline block was not found")
+source = source.replace(bad_preview, good_preview)
+
 old_combo_details = 'call.details = metadata + "\\n\\nENTRY: " + d.setup + "\\nEXIT: " + c.exit + "\\nSTYLE INTENT: " + styleFocus(d.library);'
 new_combo_details = 'call.details = metadata + "\\n\\nCOMBINATION: " + d.sequence + "\\nENTRY: " + d.setup + "\\nEXIT: " + c.exit + "\\nSTYLE INTENT: " + styleFocus(d.library);'
 if old_combo_details not in source:
@@ -34,6 +40,7 @@ checks = [
     "private CombatContext buildContext",
     "private ModeCall composeModeCall",
     "private Drill chooseDrillForMode",
+    'modeDescription(selected) + "\\n\\n"',
     "SITUATION: ",
     "COMBINATION: ",
     "No opponent return. Own your balance after impact",
