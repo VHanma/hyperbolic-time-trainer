@@ -8,6 +8,12 @@ on:
       - 'hanma-caller-x-v210/**'
       - 'tools/hotfix_hanma_caller_x_v210.py'
       - '.github/workflows/build_test_hanma_caller_x_v210_isolated.yml'
+  pull_request:
+    branches: [ hanma-arsenal-v2 ]
+    paths:
+      - 'hanma-caller-x-v210/**'
+      - 'tools/hotfix_hanma_caller_x_v210.py'
+      - '.github/workflows/build_test_hanma_caller_x_v210_isolated.yml'
 
 permissions:
   contents: read
@@ -126,7 +132,7 @@ jobs:
             SAFE=$(printf '%s' "$MODE" | tr '[:upper:] ' '[:lower:]-')
             "$ADB" -s emulator-5554 shell am force-stop "$PKG"
             "$ADB" -s emulator-5554 logcat -c
-            "$ADB" -s emulator-5554 shell am start -W -n "$PKG/.MainActivity" --es smoke_mode "$MODE" | tee "runtime-evidence/${SAFE}-start.txt"
+            "$ADB" -s emulator-5554 shell am start -W -n "$PKG/.MainActivity" --es smoke_mode "\"$MODE\"" | tee "runtime-evidence/${SAFE}-start.txt"
             sleep 6
             "$ADB" -s emulator-5554 shell pidof "$PKG" | tee "runtime-evidence/${SAFE}-pid.txt"
             test -s "runtime-evidence/${SAFE}-pid.txt"

@@ -15,11 +15,41 @@ if len(parts) != 7:
 payload = "".join(p.read_text(encoding="utf-8").strip() for p in parts)
 source = gzip.decompress(base64.b64decode(payload)).decode("utf-8")
 
+bad_preview = 'preview.setText(modeDescription(selected) + "\n\n" + lib + " • " + diff + " • " + total + " available");'
+good_preview = 'preview.setText(modeDescription(selected) + "\\n\\n" + lib + " • " + diff + " • " + total + " available");'
+if bad_preview not in source:
+    raise SystemExit("Mode preview newline block was not found")
+source = source.replace(bad_preview, good_preview)
+
 old_combo_details = 'call.details = metadata + "\\n\\nENTRY: " + d.setup + "\\nEXIT: " + c.exit + "\\nSTYLE INTENT: " + styleFocus(d.library);'
 new_combo_details = 'call.details = metadata + "\\n\\nCOMBINATION: " + d.sequence + "\\nENTRY: " + d.setup + "\\nEXIT: " + c.exit + "\\nSTYLE INTENT: " + styleFocus(d.library);'
 if old_combo_details not in source:
     raise SystemExit("Combo Caller details block was not found")
 source = source.replace(old_combo_details, new_combo_details)
+
+field_anchor = "    private Button pauseButton;\n"
+if field_anchor not in source:
+    raise SystemExit("Smoke-test field anchor was not found")
+source = source.replace(field_anchor, field_anchor + "    private boolean smokeTesting;\n", 1)
+
+smoke_anchor = '''                if (smokeMode != null && isKnownMode(smokeMode)) {
+                    selectedMode = smokeMode;'''
+smoke_replacement = '''                if (smokeMode != null && isKnownMode(smokeMode)) {
+                    smokeTesting = true;
+                    selectedMode = smokeMode;'''
+if smoke_anchor not in source:
+    raise SystemExit("Smoke-mode startup anchor was not found")
+source = source.replace(smoke_anchor, smoke_replacement, 1)
+
+immersive_anchor = '''    private void enterImmersive() {
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);'''
+immersive_replacement = '''    private void enterImmersive() {
+        if (smokeTesting) return;
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);'''
+if immersive_anchor not in source:
+    raise SystemExit("Immersive-mode anchor was not found")
+source = source.replace(immersive_anchor, immersive_replacement, 1)
+
 java.write_text(source, encoding="utf-8")
 
 g = gradle.read_text(encoding="utf-8")
@@ -34,6 +64,9 @@ checks = [
     "private CombatContext buildContext",
     "private ModeCall composeModeCall",
     "private Drill chooseDrillForMode",
+    'modeDescription(selected) + "\\n\\n"',
+    "private boolean smokeTesting;",
+    "if (smokeTesting) return;",
     "SITUATION: ",
     "COMBINATION: ",
     "No opponent return. Own your balance after impact",
