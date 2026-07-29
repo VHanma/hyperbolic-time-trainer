@@ -8,6 +8,12 @@ on:
       - 'hanma-caller-x-v210/**'
       - 'tools/hotfix_hanma_caller_x_v210.py'
       - '.github/workflows/build_test_hanma_caller_x_v210_isolated.yml'
+  pull_request:
+    branches: [ hanma-arsenal-v2 ]
+    paths:
+      - 'hanma-caller-x-v210/**'
+      - 'tools/hotfix_hanma_caller_x_v210.py'
+      - '.github/workflows/build_test_hanma_caller_x_v210_isolated.yml'
 
 permissions:
   contents: read
