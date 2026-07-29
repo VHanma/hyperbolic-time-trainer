@@ -14,6 +14,12 @@ if len(parts) != 7:
 
 payload = "".join(p.read_text(encoding="utf-8").strip() for p in parts)
 source = gzip.decompress(base64.b64decode(payload)).decode("utf-8")
+
+old_combo_details = 'call.details = metadata + "\\n\\nENTRY: " + d.setup + "\\nEXIT: " + c.exit + "\\nSTYLE INTENT: " + styleFocus(d.library);'
+new_combo_details = 'call.details = metadata + "\\n\\nCOMBINATION: " + d.sequence + "\\nENTRY: " + d.setup + "\\nEXIT: " + c.exit + "\\nSTYLE INTENT: " + styleFocus(d.library);'
+if old_combo_details not in source:
+    raise SystemExit("Combo Caller details block was not found")
+source = source.replace(old_combo_details, new_combo_details)
 java.write_text(source, encoding="utf-8")
 
 g = gradle.read_text(encoding="utf-8")
@@ -29,6 +35,7 @@ checks = [
     "private ModeCall composeModeCall",
     "private Drill chooseDrillForMode",
     "SITUATION: ",
+    "COMBINATION: ",
     "No opponent return. Own your balance after impact",
     "OPPONENT STATE:",
     "WHY IT FITS:",
