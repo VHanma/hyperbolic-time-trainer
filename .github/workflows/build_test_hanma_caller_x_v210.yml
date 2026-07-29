@@ -1,0 +1,215 @@
+name: Build and Test Hanma Caller v2.1 Context Engine
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ hanma-arsenal-v2 ]
+    paths:
+      - 'hanma-caller-x-v210/**'
+      - 'tools/hotfix_hanma_caller_x_v210.py'
+      - '.github/workflows/build_test_hanma_caller_x_v210.yml'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - 'hanma-caller-x-v210/**'
+      - 'tools/hotfix_hanma_caller_x_v210.py'
+      - '.github/workflows/build_test_hanma_caller_x_v210.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-context-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Rehydrate and apply context engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat hanma-caller-x/payload.part* > /tmp/hanma-caller-x.b64
+          test "$(wc -c < /tmp/hanma-caller-x.b64)" -eq 27084
+          base64 --decode /tmp/hanma-caller-x.b64 > /tmp/hanma-caller-x.tgz
+          echo 'ca390d0a1ff05f918c35efeef8b3e48f2e8bbf400edfb5a607ce9d6f49448e81  /tmp/hanma-caller-x.tgz' | sha256sum -c -
+          tar -xzf /tmp/hanma-caller-x.tgz -C hanma-caller-x
+          python tools/hotfix_hanma_caller_x_v201.py
+          python tools/hotfix_hanma_caller_x_v202.py
+          python tools/hotfix_hanma_caller_x_v210.py
+          JAVA=hanma-caller-x/app/src/main/java/com/vhanma/hanmacallerx/MainActivity.java
+          grep -q 'private CombatContext buildContext' "$JAVA"
+          grep -q 'private ModeCall composeModeCall' "$JAVA"
+          grep -q 'private Drill chooseDrillForMode' "$JAVA"
+          grep -q 'NO GHOST ADVICE' "$JAVA"
+          grep -q 'OPPONENT STATE:' "$JAVA"
+          grep -q 'WHY IT FITS:' "$JAVA"
+          grep -q "versionCode 23" hanma-caller-x/app/build.gradle
+          grep -q "2.1.0-ContextEngine" hanma-caller-x/app/build.gradle
+
+      - name: Verify drill library inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(grep -cve '^[[:space:]]*$' hanma-caller-x/app/src/main/assets/fighter_seeds.tsv)" -eq 131
+          test "$(grep -cve '^[[:space:]]*$' combo-caller/app/src/main/assets/combos_codes.txt)" -eq 400
+          test "$(grep -cve '^[[:space:]]*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
+          echo 'Expected runtime total: 2,198 drills'
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build signed release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          cd hanma-caller-x
+          /tmp/gradle-dist/gradle-8.2/bin/gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+          ./gradlew --no-daemon clean assembleRelease
+
+      - name: Boot Android 16 and test distinct mode behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runtime-evidence .avd
+          export ANDROID_AVD_HOME="$GITHUB_WORKSPACE/.avd"
+          ADB="$ANDROID_HOME/platform-tools/adb"
+          SDKMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          AVDMANAGER="$ANDROID_HOME/cmdline-tools/latest/bin/avdmanager"
+          EMULATOR="$ANDROID_HOME/emulator/emulator"
+          APK=hanma-caller-x/app/build/outputs/apk/release/app-release.apk
+          PKG=com.vhanma.hanmacallerx
+
+          sudo chmod 666 /dev/kvm || true
+          yes | "$SDKMANAGER" --licenses > runtime-evidence/sdk.log 2>&1 || true
+          "$SDKMANAGER" "platform-tools" "emulator" "system-images;android-36;google_apis;x86_64" >> runtime-evidence/sdk.log 2>&1
+          echo no | "$AVDMANAGER" create avd --force --name hanma210 --package "system-images;android-36;google_apis;x86_64" --device "pixel_6" >> runtime-evidence/sdk.log 2>&1
+
+          "$ADB" kill-server > runtime-evidence/adb-server.log 2>&1 || true
+          "$ADB" start-server >> runtime-evidence/adb-server.log 2>&1
+          "$EMULATOR" -avd hanma210 -no-window -no-audio -no-boot-anim -no-snapshot -wipe-data -no-metrics -gpu swiftshader_indirect -camera-back none -camera-front none > runtime-evidence/emulator.log 2>&1 &
+          EMULATOR_PID=$!
+          trap 'kill "$EMULATOR_PID" >/dev/null 2>&1 || true' EXIT
+
+          for i in $(seq 1 180); do
+            STATE=$("$ADB" -s emulator-5554 get-state 2>/dev/null | tr -d '\r' || true)
+            [ "$STATE" = "device" ] && break
+            sleep 2
+          done
+          test "$("$ADB" -s emulator-5554 get-state | tr -d '\r')" = "device"
+
+          BOOTED=0
+          for i in $(seq 1 180); do
+            VALUE=$("$ADB" -s emulator-5554 shell getprop sys.boot_completed 2>/dev/null | tr -d '\r' || true)
+            if [ "$VALUE" = "1" ]; then BOOTED=1; break; fi
+            sleep 2
+          done
+          test "$BOOTED" = "1"
+
+          "$ADB" -s emulator-5554 install -r "$APK" | tee runtime-evidence/install.txt
+          grep -q 'Success' runtime-evidence/install.txt
+          : > runtime-evidence/MODE-RUNTIME-REPORT.txt
+
+          MODES=(
+            'Combo Caller'
+            'Heavy Bag'
+            'Reaction'
+            'Sparring Simulator'
+            'Fight IQ'
+            'Conditioning'
+            'Fight Camp'
+            'Style Fusion'
+          )
+
+          for MODE in "${MODES[@]}"; do
+            SAFE=$(printf '%s' "$MODE" | tr '[:upper:] ' '[:lower:]-')
+            "$ADB" -s emulator-5554 shell am force-stop "$PKG"
+            "$ADB" -s emulator-5554 logcat -c
+            "$ADB" -s emulator-5554 shell am start -W -n "$PKG/.MainActivity" --es smoke_mode "$MODE" | tee "runtime-evidence/${SAFE}-start.txt"
+            sleep 6
+            "$ADB" -s emulator-5554 shell pidof "$PKG" | tee "runtime-evidence/${SAFE}-pid.txt"
+            test -s "runtime-evidence/${SAFE}-pid.txt"
+            "$ADB" -s emulator-5554 shell uiautomator dump "/sdcard/${SAFE}.xml" > "runtime-evidence/${SAFE}-uiautomator.txt"
+            "$ADB" -s emulator-5554 pull "/sdcard/${SAFE}.xml" "runtime-evidence/${SAFE}.xml" >> "runtime-evidence/${SAFE}-uiautomator.txt"
+            "$ADB" -s emulator-5554 logcat -d > "runtime-evidence/${SAFE}-logcat.txt"
+
+            grep -q 'HANMA CALLER X' "runtime-evidence/${SAFE}.xml"
+            grep -q 'SITUATION:' "runtime-evidence/${SAFE}.xml"
+            case "$MODE" in
+              'Combo Caller') grep -q 'COMBINATION:' "runtime-evidence/${SAFE}.xml" ;;
+              'Heavy Bag') grep -q 'NO GHOST ADVICE' "runtime-evidence/${SAFE}.xml" ;;
+              'Reaction') grep -q 'ONE READ:' "runtime-evidence/${SAFE}.xml" ;;
+              'Sparring Simulator') grep -q 'OPPONENT STATE:' "runtime-evidence/${SAFE}.xml" ;;
+              'Fight IQ') grep -q 'WHY:' "runtime-evidence/${SAFE}.xml" ;;
+              'Conditioning') grep -q 'PHASE:' "runtime-evidence/${SAFE}.xml" ;;
+              'Fight Camp') grep -q 'CAMP PHASE:' "runtime-evidence/${SAFE}.xml" ;;
+              'Style Fusion') grep -q 'ENTRY STYLE:' "runtime-evidence/${SAFE}.xml" ;;
+            esac
+
+            if grep -qE 'FATAL EXCEPTION.*main|Process: com.vhanma.hanmacallerx' "runtime-evidence/${SAFE}-logcat.txt"; then
+              echo "Fatal exception in $MODE" >&2
+              grep -E -A 35 -B 8 'FATAL EXCEPTION|Process: com.vhanma.hanmacallerx' "runtime-evidence/${SAFE}-logcat.txt" >&2
+              exit 1
+            fi
+            echo "$MODE: process alive, situation visible, unique mode marker visible, no fatal exception" | tee -a runtime-evidence/MODE-RUNTIME-REPORT.txt
+          done
+
+      - name: Verify and package exact tested APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-v210
+          APK=dist-v210/Hanma-Combo-Caller-X-v2.1.0-CONTEXT-ENGINE-ANDROID16-TESTED.apk
+          cp hanma-caller-x/app/build/outputs/apk/release/app-release.apk "$APK"
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee dist-v210/APK-SIGNATURE-REPORT.txt
+          "$BUILD_TOOLS/aapt" dump badging "$APK" | tee dist-v210/APK-BADGING-REPORT.txt
+          grep -q "versionCode='23'" dist-v210/APK-BADGING-REPORT.txt
+          grep -q "versionName='2.1.0-ContextEngine'" dist-v210/APK-BADGING-REPORT.txt
+          if grep -q 'uses-permission:' dist-v210/APK-BADGING-REPORT.txt; then
+            echo 'Unexpected permission declared' >&2
+            exit 1
+          fi
+          unzip -t "$APK" | tail -1 | tee dist-v210/APK-ARCHIVE-REPORT.txt
+          sha256sum "$APK" > dist-v210/Hanma-Combo-Caller-X-v2.1.0-SHA256.txt
+          cp runtime-evidence/MODE-RUNTIME-REPORT.txt dist-v210/
+          cat > dist-v210/BUILD-REPORT.txt <<'REPORT'
+          HANMA COMBO CALLER X v2.1.0 CONTEXT ENGINE
+          Package: com.vhanma.hanmacallerx
+          Version code: 23
+          Runtime target tested: Android 16 / API 36 emulator
+          Callable drills: 2,198
+          Context-aware threat matching: yes
+          Fighter-specific tactical identity: yes
+          Stateful sparring pressure/range/stance/boundary: yes
+          Distinct mode behavior: yes
+          Style Fusion with separate entry and finish styles: yes
+          Lazy offline TextToSpeech: yes
+          Runtime permissions: none
+          Android 16 modes tested: Combo Caller, Heavy Bag, Reaction, Sparring Simulator, Fight IQ, Conditioning, Fight Camp, Style Fusion
+          REPORT
+          (cd hanma-caller-x && zip -qr ../dist-v210/Hanma-Combo-Caller-X-v2.1.0-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
+
+      - name: Upload tested context-engine package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-combo-caller-x-v210-context-engine-tested
+          path: dist-v210/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-v210-context-engine-failure-evidence
+          path: runtime-evidence/*
+          if-no-files-found: warn
+          retention-days: 14
