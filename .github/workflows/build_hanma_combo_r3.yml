@@ -19,7 +19,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Materialize R4 source and verify inherited library
+      - name: Materialize R4.0.1 source and verify inherited library
         shell: bash
         run: |
           set -euo pipefail
@@ -27,9 +27,9 @@ jobs:
           test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
           SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
           mkdir -p "$SRC"
-          cat hanma-combo-r3/source_payload/MainActivity.v400.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
+          cat hanma-combo-r3/source_payload/MainActivity.v401.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
           cat hanma-combo-r3/source_payload/TacticalEngine.v400.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
-          echo 'ec5d871bc28ee7e71d1adfd5e2036e192b86072a6b61fc8e1711472516f9db9d  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java' | sha256sum -c -
+          echo 'd42c4b462847a799ceec05e1a27d43ffec2103e089e70db20fc365f1e3f6b8e0  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java' | sha256sum -c -
           echo '956e5c7c8e2e1a38aa967b2cd3046e7fe51bf431630743f0bac7f79d4b8794e3  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java' | sha256sum -c -
 
       - name: Set up JDK 17
@@ -101,21 +101,21 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          APK=dist/Hanma-Combo-Caller-R4-v4.0.0.apk
+          APK=dist/Hanma-Combo-Caller-R4-v4.0.1.apk
           cp hanma-combo-r3/app/build/outputs/apk/release/app-release.apk "$APK"
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
           "$BUILD_TOOLS/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
           grep -q "package: name='com.vhanma.hanmacombocallerr3'" dist/APK-BADGING-REPORT.txt
-          grep -q "versionCode='400'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionCode='401'" dist/APK-BADGING-REPORT.txt
           if grep -q "uses-permission:" dist/APK-BADGING-REPORT.txt; then
             echo 'R4 unexpectedly requests a permission'
             exit 1
           fi
           unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
-          sha256sum "$APK" > dist/Hanma-Combo-Caller-R4-v4.0.0-SHA256.txt
+          sha256sum "$APK" > dist/Hanma-Combo-Caller-R4-v4.0.1-SHA256.txt
           cat > dist/BUILD-REPORT.txt <<'REPORT'
-          HANMA COMBO CALLER R4 v4.0.0
+          HANMA COMBO CALLER R4 v4.0.1
           Package: com.vhanma.hanmacombocallerr3
           Upgrades R3.1.2 in place; legacy Pure Combo Caller remains separate.
           Original supplied combo slots: 898 (400 coded + 498 named).
@@ -129,31 +129,32 @@ jobs:
           Flow engine: sequence compatibility scoring plus strict anti-nonsense rejection.
           Voice: Branching Spar delayed reveal, full/opponent/call-only modes, visual fallback.
           Startup: staged and crash-safe.
+          R4.0.1 fix: corrected Activity method boundary and hardened pause/resume scheduling.
           Camera: absent
           Microphone: absent
           Network: absent
           Runtime permissions: none
           REPORT
-          (cd hanma-combo-r3 && zip -qr ../dist/Hanma-Combo-Caller-R4-v4.0.0-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
-          zip -j dist/Hanma-Combo-Caller-R4-v4.0.0-Source.zip combo-caller/app/src/main/assets/combos_codes.txt combo-caller/app/src/main/assets/combos_named.txt
+          (cd hanma-combo-r3 && zip -qr ../dist/Hanma-Combo-Caller-R4-v4.0.1-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
+          zip -j dist/Hanma-Combo-Caller-R4-v4.0.1-Source.zip combo-caller/app/src/main/assets/combos_codes.txt combo-caller/app/src/main/assets/combos_named.txt
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: hanma-combo-caller-r4-v4-0-0-final
+          name: hanma-combo-caller-r4-v4-0-1-final
           path: dist/*
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish R4 release
+      - name: Publish R4.0.1 release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG=hanma-combo-r4-v4.0.0
+          TAG=hanma-combo-r4-v4.0.1
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
           else
-            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "Hanma Combo Caller R4 v4.0.0" --notes "Major Rival 3 upgrade: developing-round memory, Branching Spar, opponent expectation and pressure, strict combo-flow grammar, weakness targeting, quality/context Skill Shards, exact Ghost Replay, quick fight presets, new fighter profiles/opponent brains, Constraint Round, Tactical Chain, improved voice controls, and the R3.1.2 crash-safe startup foundation."
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "Hanma Combo Caller R4 v4.0.1" --notes "Major Rival 3 combat-intelligence upgrade with developing-round memory, Branching Spar, opponent expectation and pressure, strict combo-flow grammar, weakness targeting, quality/context Skill Shards, exact Ghost Replay, quick fight presets, new fighter profiles/opponent brains, Constraint Round, Tactical Chain, improved voice controls, crash-safe startup, and the R4.0.1 Android compiler fix."
           fi
