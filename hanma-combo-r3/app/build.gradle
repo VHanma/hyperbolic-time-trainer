@@ -10,8 +10,8 @@ android {
         applicationId 'com.vhanma.hanmacombocallerr3'
         minSdk 23
         targetSdk 34
-        versionCode 310
-        versionName '3.1.0-Rival3'
+        versionCode 311
+        versionName '3.1.1-Rival3'
     }
 
     sourceSets {

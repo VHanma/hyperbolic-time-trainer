@@ -20,7 +20,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Materialize R3.1 source and verify inherited library
+      - name: Materialize R3.1.1 source and verify inherited library
         shell: bash
         run: |
           set -euo pipefail
@@ -28,10 +28,10 @@ jobs:
           test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
           SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
           mkdir -p "$SRC"
-          cat hanma-combo-r3/source_payload/MainActivity.v31.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
-          cat hanma-combo-r3/source_payload/TacticalEngine.v31.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
-          echo 'ee5b80fd3ba955d730f348c2d9903c67b4178395a262ef42640a10a848dc0bbb  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java' | sha256sum -c -
-          echo '2bfbff59889fe641092b8a604dfdfa9e2c98271b687038ecf3619e3a3b935d22  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java' | sha256sum -c -
+          cat hanma-combo-r3/source_payload/MainActivity.v311.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
+          cat hanma-combo-r3/source_payload/TacticalEngine.v311.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
+          echo '6df9f66f76829497dd9bbcceb94bd58a1182b5b4aca912029b28af553f585ae1  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java' | sha256sum -c -
+          echo '6dfc54c251b10abeeffb36e6eb16b6639109b083ff68b8ccb34490cfa9c142fa  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java' | sha256sum -c -
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -77,7 +77,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          APK=dist/Hanma-Combo-Caller-R3-v3.1.0.apk
+          APK=dist/Hanma-Combo-Caller-R3-v3.1.1.apk
           cp hanma-combo-r3/app/build/outputs/apk/release/app-release.apk "$APK"
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
@@ -88,9 +88,9 @@ jobs:
             exit 1
           fi
           unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
-          sha256sum "$APK" > dist/Hanma-Combo-Caller-R3-v3.1.0-SHA256.txt
+          sha256sum "$APK" > dist/Hanma-Combo-Caller-R3-v3.1.1-SHA256.txt
           cat > dist/BUILD-REPORT.txt <<'REPORT'
-          HANMA COMBO CALLER R3 v3.1.0
+          HANMA COMBO CALLER R3 v3.1.1
           Package: com.vhanma.hanmacombocallerr3
           Install behavior: side-by-side clone; legacy app remains untouched
           Supplied combo slots preserved: 898
@@ -98,7 +98,8 @@ jobs:
           Named slots: 498
           Modes: Fight Simulator, Adaptive Fight IQ, Open Exchange, Counter Drill, Pressure Hunt, MMA Transition, Reaction Flash, Skill Shards, Pure Library
           Opponent brains: Adaptive Rival, Pressure Fighter, Counter Striker, Wrestler, Southpaw Sniper, High Guard Shell, Long Kicker, Dirty Boxer, Submission Hunter, Chaos Rival
-          Tactical grammar: legal range-aware setup/defense/attack/continuation/maneuver/phase transition chains
+          Tactical grammar: range-aware setup/defense/attack/continuation/maneuver/phase-transition chains
+          Defensive event matching: punch, shot, clinch, teep, body-kick, low-kick
           Fighter DNA: three-profile percentage mixer
           Strategies: Hanma Synthesis, Musashi Initiative, Sun Tzu Manipulation, 52 Blocks Sentinel, Scientific MMA, Chaos Adaptation
           Memory: theme rotation, anti-repeat openings, failure adaptation, success escalation
@@ -106,34 +107,35 @@ jobs:
           Skill shards: persistent repetitions, AUTOMATIC threshold, mastered-shard fusion
           Custom technique lab: supported
           Interactive feedback: LANDED / DEFENDED / RESET STATE
+          Manual feedback cancels pending automatic calls
           Camera: absent
           Microphone: absent
           Network: absent
           Runtime permissions: none
           REPORT
-          (cd hanma-combo-r3 && zip -qr ../dist/Hanma-Combo-Caller-R3-v3.1.0-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
-          zip -j dist/Hanma-Combo-Caller-R3-v3.1.0-Source.zip combo-caller/app/src/main/assets/combos_codes.txt combo-caller/app/src/main/assets/combos_named.txt
+          (cd hanma-combo-r3 && zip -qr ../dist/Hanma-Combo-Caller-R3-v3.1.1-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
+          zip -j dist/Hanma-Combo-Caller-R3-v3.1.1-Source.zip combo-caller/app/src/main/assets/combos_codes.txt combo-caller/app/src/main/assets/combos_named.txt
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: hanma-combo-caller-r3-v3-1-final
+          name: hanma-combo-caller-r3-v3-1-1-final
           path: dist/*
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish R3.1 release
+      - name: Publish R3.1.1 release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG=hanma-combo-r3-v3.1.0
+          TAG=hanma-combo-r3-v3.1.1
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
           else
             gh release create "$TAG" dist/* \
               --target "$GITHUB_SHA" \
-              --title "Hanma Combo Caller R3 v3.1.0" \
-              --notes "Rival 3 fight-simulator upgrade: opponent brains, range-aware tactical grammar, three-way Fighter DNA mixer, adaptive memory and difficulty, round personas, Musashi/Sun Tzu/52 Blocks strategy layers, Open Exchange, Reaction Flash, persistent Skill Shards, custom technique lab, and interactive fight feedback. Original app remains untouched."
+              --title "Hanma Combo Caller R3 v3.1.1" \
+              --notes "Rival 3 fight-simulator build with opponent brains, range-aware tactical grammar, three-way Fighter DNA mixer, adaptive memory and difficulty, round personas, Musashi/Sun Tzu/52 Blocks strategy layers, Open Exchange, Reaction Flash, persistent Skill Shards, custom technique lab, interactive fight feedback, event-specific defense matching, and double-call prevention. Original app remains untouched."
           fi
