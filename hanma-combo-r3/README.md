@@ -1,20 +1,28 @@
-# Hanma Combo Caller R3
+# Hanma Combo Caller R3 v3.1
 
-Side-by-side clone of the Pure Combo Caller with a new tactical state engine.
+Side-by-side clone of the Pure Combo Caller, rebuilt as an offline tactical fight simulator.
 
 ## Package
 `com.vhanma.hanmacombocallerr3`
 
-## What R3 adds
-- Keeps the original 898 supplied combo slots in Pure Library mode.
-- Adaptive Fight IQ: read -> defense/setup -> attack -> maneuver.
-- Counter Drill, Pressure Hunt, MMA Transition, and Reaction Flash modes.
-- Fighter/strategy profiles: Hanma Adaptive, Ilia Topuria, prime Conor McGregor, Benny Urquidez, Bas Rutten, Jon Jones, Nick Diaz, Anderson Silva, Justin Gaethje, Sean O'Malley, Georges St-Pierre, Lyoto Machida, Miyamoto Musashi, Sun Tzu, and 52 Blocks Sentinel.
-- Opponent situation, range, stance, and phase controls.
-- Separate toggles for feints, kicks/knees, clinch/elbows, takedowns, and ground continuation.
-- Anti-repeat logic for whole cues and opening actions.
-- Voice timing waits until TTS finishes before starting the recovery gap.
-- WHY panel explains the tactical logic behind each generated cue.
-- Setup preferences persist between sessions.
-
-No camera, microphone, network permission, account, or cloud dependency.
+## R3.1 systems
+- Preserves all 898 supplied combo slots in Pure Library mode.
+- Opponent Brain: adaptive rival, pressure fighter, counter striker, wrestler, southpaw sniper, high-guard shell, long kicker, dirty boxer, submission hunter, chaos rival.
+- Tactical grammar: read -> manipulation/defense -> attack -> continuation -> maneuver/phase transition.
+- Fight Simulator feedback buttons: LANDED, DEFENDED, RESET STATE. The rival adapts to the result.
+- Fighter DNA Mixer: blend three profiles by percentage.
+- Profiles: Hanma Adaptive, Ilia Topuria, prime Conor McGregor, Benny Urquidez, Bas Rutten, Jon Jones, Nick Diaz, Anderson Silva, Justin Gaethje, Sean O'Malley, Georges St-Pierre, Lyoto Machida, Miyamoto Musashi, Sun Tzu, 52 Blocks Sentinel.
+- Strategy layers: Hanma Synthesis, Musashi Initiative, Sun Tzu Manipulation, 52 Blocks Sentinel, Scientific MMA, Chaos Adaptation.
+- Round personas: counter, pressure, body attack, southpaw, wrestling threat, cage, survival, finisher, chaos.
+- Range-state engine: outside -> kicking -> boxing -> pocket -> clinch -> wrestling -> ground, with legal transitions.
+- Stance state: orthodox, southpaw, auto-switch.
+- Automatic difficulty evolution based on session success/failure feedback.
+- Adaptive tactical memory rotates themes, avoids stale openings, and changes patterns after failure feedback.
+- Open Exchange mode gives constraints instead of prescribing every technique.
+- Reaction Flash mode for immediate perception-action calls.
+- Skill Shards mode tracks reps to an AUTOMATIC threshold and starts combining mastered shards.
+- Persistent shard progress in local app storage.
+- Custom Technique Lab syntax: `Name | RANGE | ROLE | tags`.
+- Coach interruptions and optional WHY explanations.
+- TTS-completion-aware pacing so recovery time starts after the call finishes.
+- No camera, microphone, account, network permission, or cloud dependency.
