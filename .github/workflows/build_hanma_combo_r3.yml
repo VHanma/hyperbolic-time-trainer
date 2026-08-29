@@ -1,4 +1,4 @@
-name: Build Hanma Combo Caller R3 APK
+name: Build Hanma Combo Caller R4 APK
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Materialize R3.1.2 source and verify inherited library
+      - name: Materialize R4 source and verify inherited library
         shell: bash
         run: |
           set -euo pipefail
@@ -27,10 +27,10 @@ jobs:
           test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
           SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
           mkdir -p "$SRC"
-          cat hanma-combo-r3/source_payload/MainActivity.v312.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
-          cat hanma-combo-r3/source_payload/TacticalEngine.v311.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
-          echo 'b83098830ea7f31150b6e83f044856df90019809bac26b3bf2b597f4891be2ef  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java' | sha256sum -c -
-          echo '6dfc54c251b10abeeffb36e6eb16b6639109b083ff68b8ccb34490cfa9c142fa  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java' | sha256sum -c -
+          cat hanma-combo-r3/source_payload/MainActivity.v400.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
+          cat hanma-combo-r3/source_payload/TacticalEngine.v400.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
+          echo 'ec5d871bc28ee7e71d1adfd5e2036e192b86072a6b61fc8e1711472516f9db9d  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java' | sha256sum -c -
+          echo '956e5c7c8e2e1a38aa967b2cd3046e7fe51bf431630743f0bac7f79d4b8794e3  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java' | sha256sum -c -
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -38,12 +38,37 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Logic compile sanity check
+      - name: R4 tactical-engine stress test
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/r3-logic
-          javac -d /tmp/r3-logic hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java
+          mkdir -p /tmp/r4-logic
+          javac -d /tmp/r4-logic hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java
+          cat > /tmp/R4Harness.java <<'JAVA'
+          import com.vhanma.hanmacombocallerr3.TacticalEngine;
+          import java.util.*;
+          public class R4Harness {
+            public static void main(String[] args) {
+              TacticalEngine e = new TacticalEngine(Arrays.asList("Jab Cross","Slip Cross"), Arrays.asList("1-2","2-3"));
+              String[] f={"AUTO","LANDED","BLOCKED","MISSED","COUNTERED","LANDED","AUTO"};
+              int calls=0;
+              for(String mode:TacticalEngine.MODES){
+                if(mode.equals("Ghost Replay")) continue;
+                TacticalEngine.Config c=new TacticalEngine.Config(); c.mode=mode; c.baseDifficulty=8; c.opponent="Adaptive Rival";
+                e.setConfig(c);
+                for(int i=0;i<250;i++){ TacticalEngine.Result r=e.next(f[i%f.length]); if(r==null||r.cue==null||r.cue.trim().isEmpty()) throw new RuntimeException("empty cue "+mode); calls++; }
+              }
+              for(String opp:TacticalEngine.OPPONENTS) for(String strategy:TacticalEngine.STRATEGIES){
+                TacticalEngine.Config c=new TacticalEngine.Config(); c.mode="Fight Simulator"; c.opponent=opp; c.strategy=strategy; c.baseDifficulty=10; e.setConfig(c);
+                for(int i=0;i<40;i++){ if(e.next(f[i%f.length]).cue.isEmpty()) throw new RuntimeException("empty matrix cue"); calls++; }
+              }
+              String shard=e.exportShardState(); e.importShardState(shard);
+              System.out.println("R4 stress OK calls="+calls+" shardBytes="+shard.length());
+            }
+          }
+          JAVA
+          javac -cp /tmp/r4-logic -d /tmp/r4-logic /tmp/R4Harness.java
+          java -cp /tmp/r4-logic R4Harness
 
       - name: Set up Gradle 8.2
         shell: bash
@@ -60,14 +85,14 @@ jobs:
         run: |
           set -o pipefail
           cd hanma-combo-r3
-          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/hanma-r3-build.log
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/hanma-r4-build.log
 
       - name: Upload compiler diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: hanma-combo-r3-build-log
-          path: /tmp/hanma-r3-build.log
+          name: hanma-combo-r4-build-log
+          path: /tmp/hanma-r4-build.log
           retention-days: 7
           if-no-files-found: ignore
 
@@ -76,51 +101,59 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          APK=dist/Hanma-Combo-Caller-R3-v3.1.2.apk
+          APK=dist/Hanma-Combo-Caller-R4-v4.0.0.apk
           cp hanma-combo-r3/app/build/outputs/apk/release/app-release.apk "$APK"
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
           "$BUILD_TOOLS/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
           grep -q "package: name='com.vhanma.hanmacombocallerr3'" dist/APK-BADGING-REPORT.txt
-          grep -q "versionCode='312'" dist/APK-BADGING-REPORT.txt
-          if grep -q "uses-permission:" dist/APK-BADGING-REPORT.txt; then exit 1; fi
+          grep -q "versionCode='400'" dist/APK-BADGING-REPORT.txt
+          if grep -q "uses-permission:" dist/APK-BADGING-REPORT.txt; then
+            echo 'R4 unexpectedly requests a permission'
+            exit 1
+          fi
           unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
-          sha256sum "$APK" > dist/Hanma-Combo-Caller-R3-v3.1.2-SHA256.txt
+          sha256sum "$APK" > dist/Hanma-Combo-Caller-R4-v4.0.0-SHA256.txt
           cat > dist/BUILD-REPORT.txt <<'REPORT'
-          HANMA COMBO CALLER R3 v3.1.2 STARTUP HOTFIX
+          HANMA COMBO CALLER R4 v4.0.0
           Package: com.vhanma.hanmacombocallerr3
-          Original 898 supplied combo slots preserved.
-          Startup is staged: UI first, tactical engine second, TTS last.
-          Tactical engine and voice failures are isolated instead of terminating the Activity.
-          Corrupt R3 shard/custom preferences self-recover.
-          Recovery screen replaces silent startup termination.
-          Spinner construction simplified for device compatibility.
-          Window/immersive calls are guarded.
+          Upgrades R3.1.2 in place; legacy Pure Combo Caller remains separate.
+          Original supplied combo slots: 898 (400 coded + 498 named).
+          Core: developing-round tactical memory with PROBE / ESTABLISH / CONDITION / EXPLOIT / ADAPT.
+          Modes: Fight Simulator, Branching Spar, Adaptive Fight IQ, Tactical Chain, Counter Drill, Pressure Hunt, MMA Transition, Reaction Flash, Open Exchange, Constraint Round, Skill Shards, Ghost Replay, Pure Library.
+          Feedback: LANDED / BLOCKED / MISSED / COUNTERED with rival pressure and weakness tracking.
+          Skill Shards: attempts + quality + 3-context requirement before AUTOMATIC mastery.
+          Ghost Replay: exact prior-round tactical frames stored locally.
+          New opponent brains: Switch Hitter, Cage Wrestler, Blitz Fighter, Attrition Kicker, Scramble Monster.
+          New profiles: Alex Pereira, Demetrious Johnson, Max Holloway, Islam Makhachev, Petr Yan.
+          Flow engine: sequence compatibility scoring plus strict anti-nonsense rejection.
+          Voice: Branching Spar delayed reveal, full/opponent/call-only modes, visual fallback.
+          Startup: staged and crash-safe.
           Camera: absent
           Microphone: absent
           Network: absent
           Runtime permissions: none
           REPORT
-          (cd hanma-combo-r3 && zip -qr ../dist/Hanma-Combo-Caller-R3-v3.1.2-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
-          zip -j dist/Hanma-Combo-Caller-R3-v3.1.2-Source.zip combo-caller/app/src/main/assets/combos_codes.txt combo-caller/app/src/main/assets/combos_named.txt
+          (cd hanma-combo-r3 && zip -qr ../dist/Hanma-Combo-Caller-R4-v4.0.0-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
+          zip -j dist/Hanma-Combo-Caller-R4-v4.0.0-Source.zip combo-caller/app/src/main/assets/combos_codes.txt combo-caller/app/src/main/assets/combos_named.txt
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: hanma-combo-caller-r3-v3-1-2-final
+          name: hanma-combo-caller-r4-v4-0-0-final
           path: dist/*
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish R3.1.2 release
+      - name: Publish R4 release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG=hanma-combo-r3-v3.1.2
+          TAG=hanma-combo-r4-v4.0.0
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
           else
-            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "Hanma Combo Caller R3 v3.1.2" --notes "Startup hotfix: staged boot, engine/TTS isolation, corrupt-setting recovery, compatibility-safe spinners, guarded window calls, and an in-app recovery screen instead of silent startup termination."
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "Hanma Combo Caller R4 v4.0.0" --notes "Major Rival 3 upgrade: developing-round memory, Branching Spar, opponent expectation and pressure, strict combo-flow grammar, weakness targeting, quality/context Skill Shards, exact Ghost Replay, quick fight presets, new fighter profiles/opponent brains, Constraint Round, Tactical Chain, improved voice controls, and the R3.1.2 crash-safe startup foundation."
           fi
