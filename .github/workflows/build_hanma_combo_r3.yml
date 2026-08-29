@@ -28,8 +28,8 @@ jobs:
           test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
           SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
           mkdir -p "$SRC"
-          base64 -d hanma-combo-r3/source_payload/MainActivity.java.gz.b64 | gzip -d > "$SRC/MainActivity.java"
-          base64 -d hanma-combo-r3/source_payload/TacticalEngine.java.gz.b64 | gzip -d > "$SRC/TacticalEngine.java"
+          cat hanma-combo-r3/source_payload/MainActivity.v31.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
+          cat hanma-combo-r3/source_payload/TacticalEngine.v31.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
           echo 'ee5b80fd3ba955d730f348c2d9903c67b4178395a262ef42640a10a848dc0bbb  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java' | sha256sum -c -
           echo '2bfbff59889fe641092b8a604dfdfa9e2c98271b687038ecf3619e3a3b935d22  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java' | sha256sum -c -
 
