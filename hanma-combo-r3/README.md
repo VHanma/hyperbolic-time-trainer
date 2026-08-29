@@ -1,30 +1,25 @@
-# Hanma Combo Caller R3 v3.1.1
+# Hanma Combo Caller R4 v4.0.0
 
-Side-by-side clone of the Pure Combo Caller, rebuilt as an offline tactical fight simulator.
+Offline tactical combat-intelligence upgrade of Hanma Combo Caller. Same package ID, installs directly over R3.1.2.
 
-## Package
-`com.vhanma.hanmacombocallerr3`
+## Major R4 upgrades
+- Developing-round memory: PROBE -> ESTABLISH -> CONDITION -> EXPLOIT -> ADAPT.
+- Branching Spar hides the solution so you react to the opponent before R4 reveals its chain.
+- Opponent brains hold tactical behavior across exchanges instead of re-rolling every call.
+- Rival pressure meter changes with LANDED / BLOCKED / MISSED / COUNTERED feedback.
+- Opponent expectation model and predicted-reaction display.
+- Strict flow scoring rewards coherent side-to-side, body-head, strike-wrestling, and range transitions.
+- Weakness targeting learns which categories are failing and feeds them back into training.
+- Skill Shards now require attempts + quality outcomes + at least 3 contexts before AUTOMATIC mastery.
+- Exact Ghost Replay stores and replays the previous round frame-for-frame.
+- End-of-round report with outcomes, difficulty, weakness focus, phase, and shard mastery.
+- Quick presets: Hanma MMA, Topuria pressure, McGregor counter, 52 Sentinel, GSP Mix, Chaos.
+- New profiles: Alex Pereira, Demetrious Johnson, Max Holloway, Islam Makhachev, Petr Yan.
+- New opponent brains: Switch Hitter, Cage Wrestler, Blitz Fighter, Attrition Kicker, Scramble Monster.
+- New strategy layer: Saboteur Disruption.
+- New Constraint Round and Tactical Chain modes.
+- Improved Custom Technique Lab syntax: `Name | START RANGE | ROLE | END RANGE | tags`.
+- Startup remains crash-safe and voice failure falls back to visual calls.
+- No camera, microphone, account, network, or cloud requirement.
 
-## R3 systems
-- Preserves all 898 supplied combo slots in Pure Library mode.
-- Opponent Brain: adaptive rival, pressure fighter, counter striker, wrestler, southpaw sniper, high-guard shell, long kicker, dirty boxer, submission hunter, chaos rival.
-- Tactical grammar: read -> defense/manipulation -> attack -> continuation -> maneuver/phase transition.
-- Fight Simulator feedback buttons: LANDED, DEFENDED, RESET STATE. The rival adapts to the result.
-- Fighter DNA Mixer: blend three profiles by percentage.
-- Profiles: Hanma Adaptive, Ilia Topuria, prime Conor McGregor, Benny Urquidez, Bas Rutten, Jon Jones, Nick Diaz, Anderson Silva, Justin Gaethje, Sean O'Malley, Georges St-Pierre, Lyoto Machida, Miyamoto Musashi, Sun Tzu, and 52 Blocks Sentinel.
-- Strategy layers: Hanma Synthesis, Musashi Initiative, Sun Tzu Manipulation, 52 Blocks Sentinel, Scientific MMA, Chaos Adaptation.
-- Round personas: counter, pressure, body attack, southpaw, wrestling threat, cage, survival, finisher, chaos.
-- Range-state engine: outside -> kicking -> boxing -> pocket -> clinch -> wrestling -> ground with legal phase bridges.
-- Stance state: orthodox, southpaw, auto-switch.
-- Automatic difficulty evolution based on session success/failure feedback.
-- Adaptive tactical memory rotates themes, avoids stale openings, and changes patterns after failure feedback.
-- Open Exchange mode gives tactical constraints instead of prescribing every technique.
-- Reaction Flash mode for immediate perception-action calls.
-- Skill Shards mode tracks reps to an AUTOMATIC threshold and starts combining mastered shards.
-- Persistent shard progress in local app storage.
-- Custom Technique Lab syntax: `Name | RANGE | ROLE | tags`.
-- Coach interruptions and optional WHY explanations.
-- TTS-completion-aware pacing so recovery time starts after the call finishes.
-- Anti-stupid-combo filter now distinguishes punches, shots, clinch attacks, teeps, body kicks, and low kicks when choosing defenses.
-- Manual feedback cancels the pending automatic cue cleanly, preventing double calls.
-- No camera, microphone, account, network permission, or cloud dependency.
+Package: `com.vhanma.hanmacombocallerr3`
