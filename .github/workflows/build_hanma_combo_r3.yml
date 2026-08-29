@@ -28,10 +28,16 @@ jobs:
           test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
           SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
           mkdir -p "$SRC"
-          base64 -d hanma-combo-r3/source_payload/MainActivity.java.gz.b64 | gzip -d > "$SRC/MainActivity.java"
-          base64 -d hanma-combo-r3/source_payload/TacticalEngine.java.gz.b64 | gzip -d > "$SRC/TacticalEngine.java"
-          test -s "$SRC/MainActivity.java"
-          test -s "$SRC/TacticalEngine.java"
+          cat hanma-combo-r3/source_payload/MainActivity.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
+          cat hanma-combo-r3/source_payload/TacticalEngine.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
+          echo 'c12740641ebaa4e2f75fd5b50ba88024cb3b1fd343220f7cf36ae84ac7c5b349  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java' | sha256sum -c -
+          echo '1a6623dd81bbc5cd46fb00f9995f1fae9b745a8775d0dc19b266407fb1af2db2  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java' | sha256sum -c -
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
 
       - name: Logic compile sanity check
         shell: bash
@@ -39,12 +45,6 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/r3-logic
           javac -d /tmp/r3-logic hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
 
       - name: Set up Gradle 8.2
         shell: bash
