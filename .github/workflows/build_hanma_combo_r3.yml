@@ -1,0 +1,133 @@
+name: Build Hanma Combo Caller R3 APK
+
+on:
+  push:
+    branches: [ hanma-combo-r3 ]
+    paths:
+      - 'hanma-combo-r3/**'
+      - '.github/workflows/build_hanma_combo_r3.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Materialize R3 source and verify inherited library
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_codes.txt)" -eq 400
+          test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          mkdir -p "$SRC"
+          base64 -d hanma-combo-r3/source_payload/MainActivity.java.gz.b64 | gzip -d > "$SRC/MainActivity.java"
+          base64 -d hanma-combo-r3/source_payload/TacticalEngine.java.gz.b64 | gzip -d > "$SRC/TacticalEngine.java"
+          test -s "$SRC/MainActivity.java"
+          test -s "$SRC/TacticalEngine.java"
+
+      - name: Logic compile sanity check
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/r3-logic
+          javac -d /tmp/r3-logic hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle 8.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          cd hanma-combo-r3
+          /tmp/gradle-dist/gradle-8.2/bin/gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+
+      - name: Build release APK
+        shell: bash
+        run: |
+          set -o pipefail
+          cd hanma-combo-r3
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/hanma-r3-build.log
+
+      - name: Upload compiler diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-combo-r3-build-log
+          path: /tmp/hanma-r3-build.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Verify and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK=dist/Hanma-Combo-Caller-R3-v3.0.0.apk
+          cp hanma-combo-r3/app/build/outputs/apk/release/app-release.apk "$APK"
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BUILD_TOOLS/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
+          grep -q "package: name='com.vhanma.hanmacombocallerr3'" dist/APK-BADGING-REPORT.txt
+          if grep -q "uses-permission:" dist/APK-BADGING-REPORT.txt; then
+            echo 'R3 unexpectedly requests a permission'
+            exit 1
+          fi
+          unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
+          sha256sum "$APK" > dist/Hanma-Combo-Caller-R3-v3.0.0-SHA256.txt
+          cat > dist/BUILD-REPORT.txt <<'REPORT'
+          HANMA COMBO CALLER R3 v3.0.0
+          Package: com.vhanma.hanmacombocallerr3
+          Install behavior: side-by-side clone; legacy app remains untouched
+          Supplied combo slots preserved: 898
+          Coded slots: 400
+          Named slots: 498
+          Tactical modes: Adaptive Fight IQ, Counter Drill, Pressure Hunt, MMA Transition, Reaction Flash, Pure Library
+          Tactical inputs: fighter DNA, opponent situation, range, stance, phase/options
+          Profiles: Hanma Adaptive, Ilia Topuria, prime Conor McGregor, Benny Urquidez, Bas Rutten, Jon Jones, Nick Diaz, Anderson Silva, Justin Gaethje, Sean O'Malley, Georges St-Pierre, Lyoto Machida, Miyamoto Musashi, Sun Tzu, 52 Blocks Sentinel
+          Enhancements: defense-first logic, feints/traps, kicks/knees, clinch/elbows, takedown/ground continuations, anti-repeat cue/opening logic, WHY explanations, persistent setup, TTS-completion-aware timing
+          Camera: absent
+          Microphone: absent
+          Network: absent
+          Runtime permissions: none
+          REPORT
+          (cd hanma-combo-r3 && zip -qr ../dist/Hanma-Combo-Caller-R3-v3.0.0-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
+          zip -j dist/Hanma-Combo-Caller-R3-v3.0.0-Source.zip combo-caller/app/src/main/assets/combos_codes.txt combo-caller/app/src/main/assets/combos_named.txt
+
+      - name: Upload final package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-combo-caller-r3-v3-final
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish R3 release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=hanma-combo-r3-v3.0.0
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* \
+              --target "$GITHUB_SHA" \
+              --title "Hanma Combo Caller R3 v3.0.0" \
+              --notes "Rival 3 tactical clone. Separate package, original 898-slot library preserved, adaptive fight-IQ engine, fighter profiles, situational counters, MMA transitions, anti-repeat logic, and voice-completion-aware pacing."
+          fi
