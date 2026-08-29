@@ -10,8 +10,8 @@ android {
         applicationId 'com.vhanma.hanmacombocallerr3'
         minSdk 23
         targetSdk 34
-        versionCode 401
-        versionName '4.0.1-Rival3'
+        versionCode 402
+        versionName '4.0.2-Rival3'
     }
 
     sourceSets {
