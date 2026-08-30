@@ -1,0 +1,26 @@
+name: Build SignalLine APK
+on:
+  push:
+    branches: [ "signalline-rvbot" ]
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+      - name: Unpack SignalLine source
+        run: mkdir -p build/SignalLine && unzip -q SignalLine-source-v1.0.0-alpha1.zip -d build/SignalLine
+      - name: Build debug APK
+        working-directory: build/SignalLine
+        run: gradle :app:assembleDebug --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SignalLine-v1.0.0-alpha1-debug
+          path: build/SignalLine/app/build/outputs/apk/debug/app-debug.apk
