@@ -22,25 +22,22 @@ jobs:
           unzip -t SignalLine-source-v1.0.0-alpha1-fixed.zip
           mkdir -p build-src
           unzip -q SignalLine-source-v1.0.0-alpha1-fixed.zip -d build-src
-      - name: Apply compile fixes
+      - name: Apply Rival 3 upgrades
         run: |
           python - <<'PY'
           from pathlib import Path
 
           main = Path('build-src/signalline-src/app/src/main/java/com/vhanma/signalline/MainActivity.kt')
           s = main.read_text()
+
+          # Keep the home-screen compile-safe rewrite from v1.0.
           start = s.index('@Composable fun Home(vm:SignalViewModel)')
           end = s.index('@Composable fun Session(vm:SignalViewModel)')
           home = r'''@Composable
           fun Home(vm: SignalViewModel) {
-              Column(
-                  Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)
-              ) {
+              Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
                   Header("SIGNALLINE")
-                  Box(
-                      Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(150.dp)
-                          .background(Panel, RoundedCornerShape(28.dp))
-                  ) {
+                  Box(Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(150.dp).background(Panel, RoundedCornerShape(28.dp))) {
                       Canvas(Modifier.fillMaxSize()) {
                           for (i in 0..9) {
                               val y = size.height * (i / 10f)
@@ -61,7 +58,8 @@ jobs:
                   }
                   Spacer(Modifier.height(18.dp))
                   HomeButton("BEGIN BLIND SESSION", "Human CRV Stages I–VI", Icons.Default.Visibility) { vm.startHuman() }
-                  HomeButton("AUTONOMOUS RV BOT", "Three blind machine passes", Icons.Default.Memory) { vm.runBot() }
+                  HomeButton("AUTONOMOUS RV BOT", "${vm.botMode.label} · three blind passes", Icons.Default.Memory) { vm.runBot() }
+                  TextButton(onClick={vm.cycleBotMode()}, modifier=Modifier.padding(horizontal=16.dp)) { Text("BOT MODE: ${vm.botMode.label}") }
                   HomeButton("ACADEMY", "Protocol drills + stage guide", Icons.Default.School) { vm.screen = Screen.ACADEMY }
                   HomeButton("HISTORY + ANALYTICS", "Past sessions and scores", Icons.Default.QueryStats) { vm.screen = Screen.HISTORY }
                   Text("Acquisition stays target-blind until session lock.", Modifier.padding(20.dp), color = Soft, fontSize = 12.sp)
@@ -69,23 +67,12 @@ jobs:
           }
 
           @Composable
-          fun HomeButton(
-              t: String,
-              s: String,
-              icon: androidx.compose.ui.graphics.vector.ImageVector,
-              on: () -> Unit
-          ) {
-              Card(
-                  Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().clickable { on() },
-                  colors = CardDefaults.cardColors(containerColor = Panel)
-              ) {
+          fun HomeButton(t: String, s: String, icon: androidx.compose.ui.graphics.vector.ImageVector, on: () -> Unit) {
+              Card(Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().clickable { on() }, colors = CardDefaults.cardColors(containerColor = Panel)) {
                   Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
                       Icon(icon, contentDescription = null, tint = Cyan, modifier = Modifier.size(28.dp))
                       Spacer(Modifier.width(16.dp))
-                      Column(Modifier.weight(1f)) {
-                          Text(t, fontWeight = FontWeight.Bold)
-                          Text(s, color = Soft, fontSize = 13.sp)
-                      }
+                      Column(Modifier.weight(1f)) { Text(t, fontWeight = FontWeight.Bold); Text(s, color = Soft, fontSize = 13.sp) }
                       Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Soft)
                   }
               }
@@ -93,6 +80,66 @@ jobs:
 
           '''
           s = s[:start] + home + s[end:]
+
+          # Research-integrity upgrades.
+          s = s.replace(
+              'data class SessionRecord(val trn:String,val target:String,val guess:String,val score:Int,val mode:String,val report:String)\ndata class BotResult',
+              'data class SessionRecord(val trn:String,val target:String,val guess:String,val score:Int,val mode:String,val report:String,val commitment:String="",val bestStage:String="")\nenum class BotMode(val label:String){ TRN_ONLY("TRN ONLY"), TRN_ENTROPY("TRN + ENTROPY"), REPLAY_CONTROL("REPLAY CONTROL") }\ndata class BotResult'
+          )
+          s = s.replace(
+              ' var botResult by mutableStateOf<BotResult?>(null)\n var history',
+              ' var botResult by mutableStateOf<BotResult?>(null)\n var botMode by mutableStateOf(BotMode.TRN_ENTROPY)\n var commitment by mutableStateOf("")\n var candidatePacket by mutableStateOf<List<Target>>(emptyList())\n var history'
+          )
+          s = s.replace(
+              ' fun reset(){ stage=Stage.I; locked=false; revealed=false; entries=emptyMap(); aols=emptyList(); points=emptyList(); gestalt=""; selectedCandidate=null; botResult=null }',
+              ' fun reset(){ stage=Stage.I; locked=false; revealed=false; entries=emptyMap(); aols=emptyList(); points=emptyList(); gestalt=""; selectedCandidate=null; botResult=null; commitment=""; candidatePacket=emptyList() }'
+          )
+          s = s.replace(' fun lock(){ locked=true }', ' fun lock(){ commitment=sha256("$trn|${fullReport()}|${confidence}|${points.size}"); locked=true }')
+          s = s.replace(
+              ' fun candidates():List<Target>{ val t=target?:return emptyList(); val dec=targets.filter{it.id!=t.id && it.family==t.family}.shuffled().take(2)+targets.filter{it.id!=t.id && it.family!=t.family}.shuffled().take(2); return (dec+t).shuffled() }',
+              ' fun candidates():List<Target>{ if(candidatePacket.isNotEmpty()) return candidatePacket; val t=target?:return emptyList(); val dec=targets.filter{it.id!=t.id && it.family==t.family}.shuffled().take(2)+targets.filter{it.id!=t.id && it.family!=t.family}.shuffled().take(2); candidatePacket=(dec+t).shuffled(); return candidatePacket }'
+          )
+          s = s.replace(
+              ' fun judge(c:Target){ selectedCandidate=c; val t=target?:return; val s=if(c.id==t.id)100 else overlapScore(c,t); save(SessionRecord(trn,t.name,c.name,s,"HUMAN",fullReport())) }',
+              ' fun judge(c:Target){ selectedCandidate=c; val t=target?:return; val s=if(c.id==t.id)100 else overlapScore(c,t); val best=bestStage(t); save(SessionRecord(trn,t.name,c.name,s,"HUMAN",fullReport(),commitment,best)) }'
+          )
+          s = s.replace(
+              ' fun runBot(){ reset(); trn=randomTrn(); target=targets[rng.nextInt(targets.size)]; val sensor=System.nanoTime().toString()+rng.nextLong(); val pass=(1..3).map{ hashInts("$trn|$sensor|$it") };',
+              ' fun cycleBotMode(){ botMode=BotMode.entries[(BotMode.entries.indexOf(botMode)+1)%BotMode.entries.size] }\n fun runBot(){ reset(); trn=randomTrn(); target=targets[rng.nextInt(targets.size)]; val channel=when(botMode){ BotMode.TRN_ONLY->trn; BotMode.TRN_ENTROPY->"$trn|${System.nanoTime()}|${rng.nextLong()}"; BotMode.REPLAY_CONTROL->"$trn|REPLAY-CONTROL" }; val pass=(1..3).map{ hashInts("$channel|$it") };'
+          )
+          s = s.replace(
+              ' botResult=BotResult(gs,ss,sp,synth,conf); locked=true; active=true; screen=Screen.BOT }',
+              ' botResult=BotResult(gs,ss,sp,synth,conf); commitment=sha256("BOT|${botMode.label}|$trn|$synth|$conf"); locked=true; active=true; screen=Screen.BOT }'
+          )
+          s = s.replace(
+              ' save(SessionRecord(trn,t.name,"Autonomous pass",score.coerceAtMost(100),"BOT",botResult?.synthesis.orEmpty())) }',
+              ' save(SessionRecord(trn,t.name,"Autonomous pass",score.coerceAtMost(100),"BOT-${botMode.label}",botResult?.synthesis.orEmpty(),commitment,"I-III")) }'
+          )
+          s = s.replace(
+              ' private fun overlapScore(a:Target,b:Target)=((a.attrs.intersect(b.attrs.toSet()).size.toFloat()/b.attrs.size)*100).toInt()\n private fun hashInts',
+              ' private fun overlapScore(a:Target,b:Target)=((a.attrs.intersect(b.attrs.toSet()).size.toFloat()/b.attrs.size)*100).toInt()\n private fun stageScore(st:Stage,t:Target):Int{ val txt=(if(st==Stage.I) gestalt+" "+entries[st].orEmpty() else entries[st].orEmpty()).lowercase(); if(txt.isBlank())return 0; return (t.attrs.count{txt.contains(it.lowercase())}*100/t.attrs.size).coerceIn(0,100) }\n private fun bestStage(t:Target):String=Stage.entries.maxByOrNull{stageScore(it,t)}?.let{"${it.short}:${stageScore(it,t)}%"}.orEmpty()\n private fun sha256(v:String)=MessageDigest.getInstance("SHA-256").digest(v.toByteArray()).joinToString(""){"%02x".format(it)}\n private fun hashInts'
+          )
+          s = s.replace(
+              'listOf(it.trn,it.target,it.guess,it.score,it.mode,it.report.replace("§"," ").replace("¦"," ")).joinToString("¦")',
+              'listOf(it.trn,it.target,it.guess,it.score,it.mode,it.report.replace("§"," ").replace("¦"," "),it.commitment,it.bestStage).joinToString("¦")'
+          )
+          s = s.replace(
+              'SessionRecord(x[0],x[1],x[2],x[3].toIntOrNull()?:0,x[4],x.drop(5).joinToString("¦"))',
+              'SessionRecord(x[0],x[1],x[2],x[3].toIntOrNull()?:0,x[4],x.getOrElse(5){""},x.getOrElse(6){""},x.getOrElse(7){""})'
+          )
+          s = s.replace(
+              'Text("Target access is now permitted.",color=Soft); if(!vm.revealed)',
+              'Text("Target access is now permitted.",color=Soft); Text("COMMIT ${vm.commitment.take(16)}…",color=Cyan,fontSize=11.sp); if(!vm.revealed)'
+          )
+          s = s.replace(
+              'Text("3 independent blind passes",fontWeight=FontWeight.Bold);Text("Bot acquisition receives TRN + local entropy only. Target data remains sealed until commit.",color=Soft);',
+              'Text("3 independent blind passes · ${vm.botMode.label}",fontWeight=FontWeight.Bold);Text("Ablation mode is frozen for this trial. Target data remains sealed until commit.",color=Soft);Text("COMMIT ${vm.commitment.take(16)}…",color=Cyan,fontSize=11.sp);'
+          )
+          s = s.replace('Text(r.mode,fontWeight=FontWeight.Black,color=if(r.mode=="BOT")Violet else Cyan);', 'Text(r.mode,fontWeight=FontWeight.Black,color=if(r.mode.startsWith("BOT"))Violet else Cyan);')
+          s = s.replace(
+              'Text("Selected: ${r.guess}",color=Soft,fontSize=12.sp)',
+              'Text("Selected: ${r.guess}",color=Soft,fontSize=12.sp); if(r.bestStage.isNotBlank())Text("Best stage: ${r.bestStage}",color=Good,fontSize=11.sp); if(r.commitment.isNotBlank())Text("Commit: ${r.commitment.take(16)}…",color=Cyan,fontSize=10.sp)'
+          )
           main.write_text(s)
 
           gradle = Path('build-src/signalline-src/app/build.gradle.kts')
@@ -110,5 +157,5 @@ jobs:
         run: gradle :app:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: SignalLine-v1.0.0-alpha1-debug
+          name: SignalLine-v1.1-rival3-debug
           path: build-src/signalline-src/app/build/outputs/apk/debug/app-debug.apk
