@@ -8,19 +8,24 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Unpack SignalLine source
-        run: mkdir -p build/SignalLine && unzip -q SignalLine-source-v1.0.0-alpha1.zip -d build/SignalLine
+      - name: Reconstruct SignalLine source
+        run: |
+          cat signalline-src.b64.00 signalline-src.b64.01 signalline-src.b64.02 signalline-src.b64.03 > signalline-src.b64
+          base64 -d signalline-src.b64 > SignalLine-source-v1.0.0-alpha1-fixed.zip
+          unzip -t SignalLine-source-v1.0.0-alpha1-fixed.zip
+          mkdir -p build-src
+          unzip -q SignalLine-source-v1.0.0-alpha1-fixed.zip -d build-src
       - name: Build debug APK
-        working-directory: build/SignalLine
+        working-directory: build-src/signalline-src
         run: gradle :app:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
           name: SignalLine-v1.0.0-alpha1-debug
-          path: build/SignalLine/app/build/outputs/apk/debug/app-debug.apk
+          path: build-src/signalline-src/app/build/outputs/apk/debug/app-debug.apk
