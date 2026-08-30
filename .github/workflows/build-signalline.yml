@@ -22,14 +22,24 @@ jobs:
           unzip -t SignalLine-source-v1.0.0-alpha1-fixed.zip
           mkdir -p build-src
           unzip -q SignalLine-source-v1.0.0-alpha1-fixed.zip -d build-src
-      - name: Apply compile fix
+      - name: Apply compile fixes
         run: |
           python - <<'PY'
           from pathlib import Path
-          p = Path('build-src/signalline-src/app/src/main/java/com/vhanma/signalline/MainActivity.kt')
-          s = p.read_text()
+          main = Path('build-src/signalline-src/app/src/main/java/com/vhanma/signalline/MainActivity.kt')
+          s = main.read_text()
           s = s.replace('Text("REMOTE VIEWING\nOPERATING ENVIRONMENT",fontWeight=FontWeight.Black,fontSize=22.sp)', 'Text("REMOTE VIEWING\\nOPERATING ENVIRONMENT",fontWeight=FontWeight.Black,fontSize=22.sp)')
-          p.write_text(s)
+          main.write_text(s)
+
+          gradle = Path('build-src/signalline-src/app/build.gradle.kts')
+          g = gradle.read_text()
+          if 'sourceCompatibility = JavaVersion.VERSION_17' not in g:
+              g = g.replace('    buildFeatures { compose = true; buildConfig = true }', '''    compileOptions {
+                  sourceCompatibility = JavaVersion.VERSION_17
+                  targetCompatibility = JavaVersion.VERSION_17
+              }
+              buildFeatures { compose = true; buildConfig = true }''')
+          gradle.write_text(g)
           PY
       - name: Build debug APK
         working-directory: build-src/signalline-src
