@@ -26,9 +26,73 @@ jobs:
         run: |
           python - <<'PY'
           from pathlib import Path
+
           main = Path('build-src/signalline-src/app/src/main/java/com/vhanma/signalline/MainActivity.kt')
           s = main.read_text()
-          s = s.replace('Text("REMOTE VIEWING\nOPERATING ENVIRONMENT",fontWeight=FontWeight.Black,fontSize=22.sp)', 'Text("REMOTE VIEWING\\nOPERATING ENVIRONMENT",fontWeight=FontWeight.Black,fontSize=22.sp)')
+          start = s.index('@Composable fun Home(vm:SignalViewModel)')
+          end = s.index('@Composable fun Session(vm:SignalViewModel)')
+          home = r'''@Composable
+          fun Home(vm: SignalViewModel) {
+              Column(
+                  Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)
+              ) {
+                  Header("SIGNALLINE")
+                  Box(
+                      Modifier.padding(horizontal = 16.dp).fillMaxWidth().height(150.dp)
+                          .background(Panel, RoundedCornerShape(28.dp))
+                  ) {
+                      Canvas(Modifier.fillMaxSize()) {
+                          for (i in 0..9) {
+                              val y = size.height * (i / 10f)
+                              drawLine(Cyan.copy(alpha = .08f), Offset(0f, y), Offset(size.width, y))
+                          }
+                          val path = Path()
+                          for (x in 0..size.width.toInt() step 5) {
+                              val wave = (sin(x.toDouble() / 28.0) * 22.0 + sin(x.toDouble() / 9.0) * 5.0).toFloat()
+                              val y = size.height / 2f + wave
+                              if (x == 0) path.moveTo(x.toFloat(), y) else path.lineTo(x.toFloat(), y)
+                          }
+                          drawPath(path, Cyan, style = Stroke(3f))
+                      }
+                      Column(Modifier.align(Alignment.Center).padding(24.dp)) {
+                          Text("REMOTE VIEWING\nOPERATING ENVIRONMENT", fontWeight = FontWeight.Black, fontSize = 22.sp)
+                          Text("Acquire → Commit → Judge → Reveal", color = Soft)
+                      }
+                  }
+                  Spacer(Modifier.height(18.dp))
+                  HomeButton("BEGIN BLIND SESSION", "Human CRV Stages I–VI", Icons.Default.Visibility) { vm.startHuman() }
+                  HomeButton("AUTONOMOUS RV BOT", "Three blind machine passes", Icons.Default.Memory) { vm.runBot() }
+                  HomeButton("ACADEMY", "Protocol drills + stage guide", Icons.Default.School) { vm.screen = Screen.ACADEMY }
+                  HomeButton("HISTORY + ANALYTICS", "Past sessions and scores", Icons.Default.QueryStats) { vm.screen = Screen.HISTORY }
+                  Text("Acquisition stays target-blind until session lock.", Modifier.padding(20.dp), color = Soft, fontSize = 12.sp)
+              }
+          }
+
+          @Composable
+          fun HomeButton(
+              t: String,
+              s: String,
+              icon: androidx.compose.ui.graphics.vector.ImageVector,
+              on: () -> Unit
+          ) {
+              Card(
+                  Modifier.padding(horizontal = 16.dp, vertical = 6.dp).fillMaxWidth().clickable { on() },
+                  colors = CardDefaults.cardColors(containerColor = Panel)
+              ) {
+                  Row(Modifier.padding(18.dp), verticalAlignment = Alignment.CenterVertically) {
+                      Icon(icon, contentDescription = null, tint = Cyan, modifier = Modifier.size(28.dp))
+                      Spacer(Modifier.width(16.dp))
+                      Column(Modifier.weight(1f)) {
+                          Text(t, fontWeight = FontWeight.Bold)
+                          Text(s, color = Soft, fontSize = 13.sp)
+                      }
+                      Icon(Icons.Default.ChevronRight, contentDescription = null, tint = Soft)
+                  }
+              }
+          }
+
+          '''
+          s = s[:start] + home + s[end:]
           main.write_text(s)
 
           gradle = Path('build-src/signalline-src/app/build.gradle.kts')
