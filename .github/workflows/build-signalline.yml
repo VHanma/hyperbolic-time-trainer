@@ -22,7 +22,7 @@ jobs:
           unzip -t SignalLine-source-v1.0.0-alpha1-fixed.zip
           mkdir -p build-src
           unzip -q SignalLine-source-v1.0.0-alpha1-fixed.zip -d build-src
-      - name: Install Mira v1.3 source
+      - name: Install Mira v1.4 source
         run: |
           cp signalline-v1.3/MainActivity.kt build-src/signalline-src/app/src/main/java/com/vhanma/signalline/MainActivity.kt
           python - <<'PY'
@@ -36,19 +36,17 @@ jobs:
               }
               buildFeatures { compose = true; buildConfig = true }''')
           gradle.write_text(g)
-
           manifest = Path('build-src/signalline-src/app/src/main/AndroidManifest.xml')
           m = manifest.read_text()
           if 'android.permission.INTERNET' not in m:
-              m = m.replace('<manifest', '<manifest', 1)
               pos = m.find('>') + 1
               m = m[:pos] + '\n    <uses-permission android:name="android.permission.INTERNET" />' + m[pos:]
           manifest.write_text(m)
           PY
-      - name: Build Mira v1.3 debug APK
+      - name: Build Mira v1.4 zero-setup APK
         working-directory: build-src/signalline-src
         run: gradle :app:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: SignalLine-v1.3-mira-cloud-debug
+          name: SignalLine-v1.4-mira-zero-setup-debug
           path: build-src/signalline-src/app/build/outputs/apk/debug/app-debug.apk
