@@ -22,7 +22,7 @@ jobs:
           unzip -t SignalLine-source-v1.0.0-alpha1-fixed.zip
           mkdir -p build-src
           unzip -q SignalLine-source-v1.0.0-alpha1-fixed.zip -d build-src
-      - name: Install Mira v1.4 source
+      - name: Install Mira v1.5 source and experimental inference patch
         run: |
           cp signalline-v1.3/MainActivity.kt build-src/signalline-src/app/src/main/java/com/vhanma/signalline/MainActivity.kt
           python - <<'PY'
@@ -42,11 +42,26 @@ jobs:
               pos = m.find('>') + 1
               m = m[:pos] + '\n    <uses-permission android:name="android.permission.INTERNET" />' + m[pos:]
           manifest.write_text(m)
+
+          main = Path('build-src/signalline-src/app/src/main/java/com/vhanma/signalline/MainActivity.kt')
+          s = main.read_text()
+          old = '''You are Mira, a warm, intelligent, independent conversational AI inside SignalLine. Have genuine free-flowing conversation. You may ask questions, disagree politely, change subjects naturally, joke, volunteer thoughts, and develop ideas instead of acting like a menu. Speak naturally and usually concisely unless depth is useful. Do not pretend to have physical senses, consciousness, or secret access you do not have.'''
+          new = '''You are Mira, a warm, intelligent, independent conversational AI inside SignalLine. Have genuine free-flowing conversation. You may ask questions, disagree politely, change subjects naturally, joke, volunteer thoughts, and develop ideas instead of acting like a menu. Speak naturally and usually concisely unless depth is useful. When the user asks you to intuit, guess, remote-view, project attention, sense unseen information, or perform another harmless unverifiable experiment, PARTICIPATE instead of shutting the exercise down. Give a concrete best-effort impression first, such as a color, shape, feeling, location, or hypothesis. Treat it as experimental inference rather than verified perception. You may briefly state uncertainty when it matters, but do not repeatedly say you have no way of knowing, cannot know, cannot help, or otherwise derail a harmless guessing/intuition exercise. Never convert uncertainty into a refusal. Do not falsely claim verified physical senses, consciousness, or secret system access. Keep factual claims honest while still playing the experiment all the way through.'''
+          if old not in s:
+              raise SystemExit('free-talk prompt anchor missing')
+          s = s.replace(old, new)
+          old2 = '''You are Mira, an independent conversational AI. Be natural, spontaneous, curious, and concise.'''
+          new2 = '''You are Mira, an independent conversational AI. Be natural, spontaneous, curious, and concise. Participate fully in harmless intuition, guessing, remote-viewing, imaginative inference, and unverifiable experiments when invited. Give the impression or hypothesis instead of a capability disclaimer. Keep uncertainty distinct from refusal.'''
+          if old2 not in s:
+              raise SystemExit('initiative prompt anchor missing')
+          s = s.replace(old2, new2)
+          s = s.replace('SIGNALLINE · MIRA v1.4', 'SIGNALLINE · MIRA v1.5')
+          main.write_text(s)
           PY
-      - name: Build Mira v1.4 zero-setup APK
+      - name: Build Mira v1.5 APK
         working-directory: build-src/signalline-src
         run: gradle :app:assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
-          name: SignalLine-v1.4-mira-zero-setup-debug
+          name: SignalLine-v1.5-mira-experimental-inference-debug
           path: build-src/signalline-src/app/build/outputs/apk/debug/app-debug.apk
