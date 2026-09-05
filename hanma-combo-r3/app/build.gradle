@@ -32,3 +32,5 @@ android {
         targetCompatibility JavaVersion.VERSION_17
     }
 }
+
+// R5 atomic source payload is SHA-verified by CI before compilation.
