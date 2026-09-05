@@ -1,4 +1,4 @@
-name: Build Hanma Combo Caller R4 APK
+name: Build Hanma Combo Caller R5 APK
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Materialize R4.0.2 source and verify inherited library
+      - name: Materialize R5.0.0 source and verify inherited library
         shell: bash
         run: |
           set -euo pipefail
@@ -27,50 +27,68 @@ jobs:
           test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
           SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
           mkdir -p "$SRC"
-          cat hanma-combo-r3/source_payload/MainActivity.v401.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
-          cat hanma-combo-r3/source_payload/TacticalEngine.v400.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
-          echo 'd42c4b462847a799ceec05e1a27d43ffec2103e089e70db20fc365f1e3f6b8e0  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java' | sha256sum -c -
-          sed -i 's/handler.post(this::scheduleNextAfterSpeech)/handler.post(MainActivity.this::scheduleNextAfterSpeech)/g' "$SRC/MainActivity.java"
-          echo '3a512102ef435d1d4cd6efc26ae0349f07c640b2a52c5398d8606d247e7d1cef  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java' | sha256sum -c -
-          echo '956e5c7c8e2e1a38aa967b2cd3046e7fe51bf431630743f0bac7f79d4b8794e3  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java' | sha256sum -c -
+          cat hanma-combo-r3/source_payload/MainActivity.v500.b64 | base64 -d | gzip -d > "$SRC/MainActivity.java"
+          cat hanma-combo-r3/source_payload/TacticalEngine.v500.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
+          echo '1347b68469182a59238415406443c05e2f85144dd6ca27b407799d8069d55870  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java' | sha256sum -c -
+          echo '32a3b379c7c4bcf5852f342c2fc479cc7ff5144bad731919ac439029fecf238b  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java' | sha256sum -c -
+          grep -q 'MainActivity.this::scheduleNextAfterSpeech' "$SRC/MainActivity.java"
+          ! grep -q 'handler.post(this::scheduleNextAfterSpeech)' "$SRC/MainActivity.java"
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: R4 tactical-engine stress test
+      - name: R5 tactical-engine stress test
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/r4-logic
-          javac -d /tmp/r4-logic hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java
-          cat > /tmp/R4Harness.java <<'JAVA'
+          mkdir -p /tmp/r5-logic
+          javac -d /tmp/r5-logic hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java
+          cat > /tmp/R5Harness.java <<'JAVA'
           import com.vhanma.hanmacombocallerr3.TacticalEngine;
           import java.util.*;
-          public class R4Harness {
+          public class R5Harness {
             public static void main(String[] args) {
               TacticalEngine e = new TacticalEngine(Arrays.asList("Jab Cross","Slip Cross"), Arrays.asList("1-2","2-3"));
-              String[] f={"AUTO","LANDED","BLOCKED","MISSED","COUNTERED","LANDED","AUTO"};
+              String[] f={"RESET","CLEAN","LATE","BLOCKED","MISSED","COUNTERED","CLEAN","AUTO"};
               int calls=0;
               for(String mode:TacticalEngine.MODES){
                 if(mode.equals("Ghost Replay")) continue;
-                TacticalEngine.Config c=new TacticalEngine.Config(); c.mode=mode; c.baseDifficulty=8; c.opponent="Adaptive Rival";
+                TacticalEngine.Config c=new TacticalEngine.Config();
+                c.mode=mode; c.baseDifficulty=8; c.opponent="Adaptive Rival";
+                c.persistentRivalMemory=true; c.powerIntent=true; c.arenaIQ=true; c.returnFireIQ=true;
                 e.setConfig(c);
-                for(int i=0;i<250;i++){ TacticalEngine.Result r=e.next(f[i%f.length]); if(r==null||r.cue==null||r.cue.trim().isEmpty()) throw new RuntimeException("empty cue "+mode); calls++; }
+                for(int i=0;i<400;i++){
+                  TacticalEngine.Result r=e.next(f[i%f.length]);
+                  if(r==null||r.cue==null||r.cue.trim().isEmpty()) throw new RuntimeException("empty cue "+mode);
+                  if(r.arena==null||r.initiative==null||r.powerPlan==null||r.returnFire==null||r.expectation==null) throw new RuntimeException("missing R5 intel "+mode);
+                  calls++;
+                }
               }
               for(String opp:TacticalEngine.OPPONENTS) for(String strategy:TacticalEngine.STRATEGIES){
-                TacticalEngine.Config c=new TacticalEngine.Config(); c.mode="Fight Simulator"; c.opponent=opp; c.strategy=strategy; c.baseDifficulty=10; e.setConfig(c);
-                for(int i=0;i<40;i++){ if(e.next(f[i%f.length]).cue.isEmpty()) throw new RuntimeException("empty matrix cue"); calls++; }
+                TacticalEngine.Config c=new TacticalEngine.Config();
+                c.mode="Fight Simulator"; c.opponent=opp; c.strategy=strategy; c.baseDifficulty=10;
+                c.persistentRivalMemory=true; c.powerIntent=true; c.arenaIQ=true; c.returnFireIQ=true;
+                e.setConfig(c);
+                for(int i=0;i<80;i++){
+                  TacticalEngine.Result r=e.next(f[i%f.length]);
+                  if(r==null||r.cue==null||r.cue.isEmpty()) throw new RuntimeException("empty matrix cue");
+                  if(r.arena==null||r.initiative==null||r.powerPlan==null||r.returnFire==null||r.expectation==null) throw new RuntimeException("missing matrix intel");
+                  calls++;
+                }
               }
               String shard=e.exportShardState(); e.importShardState(shard);
-              System.out.println("R4 stress OK calls="+calls+" shardBytes="+shard.length());
+              String combat=e.exportCombatState(); e.importCombatState(combat);
+              if(!combat.startsWith("R5|")) throw new RuntimeException("bad R5 combat state");
+              if(calls!=13200) throw new RuntimeException("unexpected call count "+calls);
+              System.out.println("R5 stress OK calls="+calls+" shardBytes="+shard.length()+" combatBytes="+combat.length());
             }
           }
           JAVA
-          javac -cp /tmp/r4-logic -d /tmp/r4-logic /tmp/R4Harness.java
-          java -cp /tmp/r4-logic R4Harness
+          javac -cp /tmp/r5-logic -d /tmp/r5-logic /tmp/R5Harness.java
+          java -cp /tmp/r5-logic R5Harness
 
       - name: Set up Gradle 8.2
         shell: bash
@@ -87,14 +105,14 @@ jobs:
         run: |
           set -o pipefail
           cd hanma-combo-r3
-          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/hanma-r4-build.log
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/hanma-r5-build.log
 
       - name: Upload compiler diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: hanma-combo-r4-build-log
-          path: /tmp/hanma-r4-build.log
+          name: hanma-combo-r5-build-log
+          path: /tmp/hanma-r5-build.log
           retention-days: 7
           if-no-files-found: ignore
 
@@ -103,60 +121,69 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          APK=dist/Hanma-Combo-Caller-R4-v4.0.2.apk
+          APK=dist/Hanma-Combo-Caller-R5-v5.0.0.apk
           cp hanma-combo-r3/app/build/outputs/apk/release/app-release.apk "$APK"
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
           "$BUILD_TOOLS/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
           grep -q "package: name='com.vhanma.hanmacombocallerr3'" dist/APK-BADGING-REPORT.txt
-          grep -q "versionCode='402'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionCode='500'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionName='5.0.0-Rival3'" dist/APK-BADGING-REPORT.txt
           if grep -q "uses-permission:" dist/APK-BADGING-REPORT.txt; then
-            echo 'R4 unexpectedly requests a permission'
+            echo 'R5 unexpectedly requests a permission'
             exit 1
           fi
           unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
-          sha256sum "$APK" > dist/Hanma-Combo-Caller-R4-v4.0.2-SHA256.txt
+          sha256sum "$APK" > dist/Hanma-Combo-Caller-R5-v5.0.0-SHA256.txt
           cat > dist/BUILD-REPORT.txt <<'REPORT'
-          HANMA COMBO CALLER R4 v4.0.2
+          HANMA COMBO CALLER R5 v5.0.0
           Package: com.vhanma.hanmacombocallerr3
-          Upgrades R3.1.2 in place; legacy Pure Combo Caller remains separate.
+          Upgrades R4.0.2 in place; legacy Pure Combo Caller remains separate.
           Original supplied combo slots: 898 (400 coded + 498 named).
-          Core: developing-round tactical memory with PROBE / ESTABLISH / CONDITION / EXPLOIT / ADAPT.
-          Modes: Fight Simulator, Branching Spar, Adaptive Fight IQ, Tactical Chain, Counter Drill, Pressure Hunt, MMA Transition, Reaction Flash, Open Exchange, Constraint Round, Skill Shards, Ghost Replay, Pure Library.
-          Feedback: LANDED / BLOCKED / MISSED / COUNTERED with rival pressure and weakness tracking.
-          Skill Shards: attempts + quality + 3-context requirement before AUTOMATIC mastery.
-          Ghost Replay: exact prior-round tactical frames stored locally.
-          New opponent brains: Switch Hitter, Cage Wrestler, Blitz Fighter, Attrition Kicker, Scramble Monster.
-          New profiles: Alex Pereira, Demetrious Johnson, Max Holloway, Islam Makhachev, Petr Yan.
-          Flow engine: sequence compatibility scoring plus strict anti-nonsense rejection.
-          Voice: Branching Spar delayed reveal, full/opponent/call-only modes, visual fallback.
-          Startup: staged and crash-safe.
-          R4.0.2 fix: TTS listener callbacks explicitly target MainActivity scheduling.
+
+          R5 COMBAT INTELLIGENCE
+          - Persistent rival memory across rounds and sessions.
+          - Per-opponent performance memory and adaptive archetype selection.
+          - Threat expectation model with decay, conditioning, and complementary exploitation.
+          - CLEAN / LATE / BLOCKED / MISSED / COUNTERED outcome feedback.
+          - Initiative and momentum state: you lead / contested / rival leads.
+          - Cage geometry: center / open space / fence / corner.
+          - Return-fire prediction by opponent family and exchange context.
+          - Power-intent planner: loose setups, one primary commit shot, balanced finish.
+          - Kinetic/body-position combination graph for position-compatible continuations.
+          - Persistent Skill Shards plus wider persistent combat memory.
+          - Exact Ghost Replay with R5 expectation, power-plan, and return-fire data.
+          - New R5 techniques include flicker jab, body-hook touch, cross rangefinder,
+            lead-step cross, shifting cross, chopping cross, lead/rear round kicks,
+            Brazilian kick, and spinning back fist.
+          - Existing PROBE / ESTABLISH / CONDITION / EXPLOIT / ADAPT round planning retained.
+          - 13,200-exchange automated tactical stress matrix before Android compilation.
+
           Camera: absent
           Microphone: absent
           Network: absent
           Runtime permissions: none
           REPORT
-          (cd hanma-combo-r3 && zip -qr ../dist/Hanma-Combo-Caller-R4-v4.0.2-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
-          zip -j dist/Hanma-Combo-Caller-R4-v4.0.2-Source.zip combo-caller/app/src/main/assets/combos_codes.txt combo-caller/app/src/main/assets/combos_named.txt
+          (cd hanma-combo-r3 && zip -qr ../dist/Hanma-Combo-Caller-R5-v5.0.0-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
+          zip -j dist/Hanma-Combo-Caller-R5-v5.0.0-Source.zip combo-caller/app/src/main/assets/combos_codes.txt combo-caller/app/src/main/assets/combos_named.txt
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: hanma-combo-caller-r4-v4-0-2-final
+          name: hanma-combo-caller-r5-v5-0-0-final
           path: dist/*
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish R4.0.2 release
+      - name: Publish R5.0.0 release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG=hanma-combo-r4-v4.0.2
+          TAG=hanma-combo-r5-v5.0.0
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
           else
-            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "Hanma Combo Caller R4 v4.0.2" --notes "Major Rival 3 combat-intelligence upgrade with developing-round memory, Branching Spar, opponent expectation and pressure, strict combo-flow grammar, weakness targeting, quality/context Skill Shards, exact Ghost Replay, quick fight presets, new fighter profiles/opponent brains, Constraint Round, Tactical Chain, improved voice controls, crash-safe startup, and corrected TTS completion scheduling."
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "Hanma Combo Caller R5 v5.0.0" --notes "Rival 3 R5 combat-intelligence rewrite: persistent rival memory, expectation/conditioning model, cage geometry, initiative, return-fire prediction, power-intent planning, body-position combo graph, expanded feedback, deeper Ghost Replay, and a 13,200-exchange pre-build stress matrix."
           fi
