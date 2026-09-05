@@ -29,7 +29,7 @@ jobs:
           mkdir -p "$SRC"
           gzip -dc hanma-combo-r3/source_payload/MainActivity.v600.java.gz > "$SRC/MainActivity.java"
           cat hanma-combo-r3/source_payload/TacticalEngine.v600.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
-          echo 'f64a218395ac8f9bc41c1ec47aaf2b6afa8f0d692c5ff58082d477abe9146e4  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java' | sha256sum -c -
+          echo 'f64a218395ac8f9bc41c1ec47aaf2b6afa8b66462f04f26223baf1013c3e74e4  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java' | sha256sum -c -
           echo '1f663ada1921abfac977bf89c46e2b9b92f359b690899c8c6c7ef1c2d79be8d2  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java' | sha256sum -c -
           grep -q 'R6 CAUSAL FIGHT INTELLIGENCE' "$SRC/MainActivity.java"
           grep -q 'validateCounterKnowledge' "$SRC/TacticalEngine.java"
