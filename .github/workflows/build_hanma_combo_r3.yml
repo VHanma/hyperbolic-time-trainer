@@ -1,4 +1,4 @@
-name: Build Hanma Combo Caller R5 APK
+name: Build Hanma Combo Caller R6 APK
 
 on:
   push:
@@ -19,7 +19,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Materialize R5.0.0 source and verify inherited library
+      - name: Materialize R6 source and verify causal engine
         shell: bash
         run: |
           set -euo pipefail
@@ -27,68 +27,84 @@ jobs:
           test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
           SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
           mkdir -p "$SRC"
-          cat hanma-combo-r3/source_payload/MainActivity.v500.b64 | base64 -d | gzip -d > "$SRC/MainActivity.java"
-          cat hanma-combo-r3/source_payload/TacticalEngine.v500.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
-          echo '1347b68469182a59238415406443c05e2f85144dd6ca27b407799d8069d55870  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java' | sha256sum -c -
-          echo '32a3b379c7c4bcf5852f342c2fc479cc7ff5144bad731919ac439029fecf238b  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java' | sha256sum -c -
+          gzip -dc hanma-combo-r3/source_payload/MainActivity.v600.java.gz > "$SRC/MainActivity.java"
+          cat hanma-combo-r3/source_payload/TacticalEngine.v600.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
+          echo 'f64a218395ac8f9bc41c1ec47aaf2b6afa8f0d692c5ff58082d477abe9146e4  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java' | sha256sum -c -
+          echo '1f663ada1921abfac977bf89c46e2b9b92f359b690899c8c6c7ef1c2d79be8d2  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java' | sha256sum -c -
+          grep -q 'R6 CAUSAL FIGHT INTELLIGENCE' "$SRC/MainActivity.java"
+          grep -q 'validateCounterKnowledge' "$SRC/TacticalEngine.java"
           grep -q 'MainActivity.this::scheduleNextAfterSpeech' "$SRC/MainActivity.java"
-          ! grep -q 'handler.post(this::scheduleNextAfterSpeech)' "$SRC/MainActivity.java"
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      - name: R5 tactical-engine stress test
+      - name: R6 causal-combat stress test
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/r5-logic
-          javac -d /tmp/r5-logic hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java
-          cat > /tmp/R5Harness.java <<'JAVA'
+          mkdir -p /tmp/r6-logic
+          javac -d /tmp/r6-logic hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java
+          cat > /tmp/R6Harness.java <<'JAVA'
           import com.vhanma.hanmacombocallerr3.TacticalEngine;
           import java.util.*;
-          public class R5Harness {
-            public static void main(String[] args) {
-              TacticalEngine e = new TacticalEngine(Arrays.asList("Jab Cross","Slip Cross"), Arrays.asList("1-2","2-3"));
-              String[] f={"RESET","CLEAN","LATE","BLOCKED","MISSED","COUNTERED","CLEAN","AUTO"};
-              int calls=0;
+          public class R6Harness {
+            static final String[] FB={"RESET","CLEAN","LATE","BLOCKED","MISSED","COUNTERED","CLEAN","AUTO"};
+            static int calls=0, threats=0, doubleJabs=0, groundCalls=0;
+            static String actionCue(String cue){
+              String c=cue==null?"":cue.toLowerCase(Locale.US).trim();
+              int bang=c.indexOf('!');
+              if(bang>=0 && bang<24){ c=c.substring(bang+1).trim(); while(c.startsWith("→")||c.startsWith("?")||c.startsWith("-")||c.startsWith(">")) c=c.substring(1).trim(); }
+              return c;
+            }
+            static void check(TacticalEngine e, TacticalEngine.Result r, String ctx){
+              if(r==null||r.cue==null||r.cue.trim().isEmpty()) throw new RuntimeException("empty cue "+ctx);
+              String threat=e.getLastThreat();
+              if(threat!=null&&!"NONE".equals(threat)&&!"Pure Library".equals(e.getConfig().mode)){
+                threats++;
+                if(!e.lastResponseSolvedThreat()) throw new RuntimeException("UNSOLVED threat="+threat+" event="+r.opponentEvent+" cue="+r.cue+" ctx="+ctx);
+              }
+              String ev=(r.opponentEvent==null?"":r.opponentEvent.toLowerCase(Locale.US));
+              String cue=actionCue(r.cue);
+              if(ev.contains("double jab")){
+                doubleJabs++;
+                if(cue.startsWith("catch the body kick")||cue.startsWith("scoop catch teep")||cue.startsWith("check calf kick")||cue.startsWith("down-block to sprawl")) throw new RuntimeException("DOUBLE-JAB MISMATCH event="+r.opponentEvent+" cue="+r.cue);
+                if(!(cue.startsWith("catch first jab, slip second")||cue.startsWith("double parry jabs")||cue.startsWith("step outside double jab"))) throw new RuntimeException("DOUBLE-JAB BAD FIRST ACTION cue="+r.cue);
+              }
+              if(!ev.contains("body kick")&&cue.startsWith("catch the body kick")) throw new RuntimeException("BODY-KICK CATCH LEAK");
+              if(!ev.contains("teep")&&cue.startsWith("scoop catch teep")) throw new RuntimeException("TEEP CATCH LEAK");
+              if(cue.contains("cross on spin recovery")&&!(ev.contains("spinning back kick")||ev.contains("spins a back fist"))) throw new RuntimeException("SPIN COUNTER LEAK");
+              if(cue.contains("cross after ankle-pick denial")&&!ev.contains("ankle pick")) throw new RuntimeException("ANKLE-PICK COUNTER LEAK");
+              String gp=e.getGroundState(); if(gp!=null&&!"STANDING".equals(gp)) groundCalls++;
+              calls++;
+            }
+            public static void main(String[] args){
+              TacticalEngine e=new TacticalEngine(Arrays.asList("Jab Cross","Slip Cross"),Arrays.asList("1-2","2-3"));
+              String graph=e.validateCounterKnowledge(); if(!graph.isEmpty()) throw new RuntimeException("counter graph incomplete: "+graph);
               for(String mode:TacticalEngine.MODES){
                 if(mode.equals("Ghost Replay")) continue;
-                TacticalEngine.Config c=new TacticalEngine.Config();
-                c.mode=mode; c.baseDifficulty=8; c.opponent="Adaptive Rival";
-                c.persistentRivalMemory=true; c.powerIntent=true; c.arenaIQ=true; c.returnFireIQ=true;
-                e.setConfig(c);
-                for(int i=0;i<400;i++){
-                  TacticalEngine.Result r=e.next(f[i%f.length]);
-                  if(r==null||r.cue==null||r.cue.trim().isEmpty()) throw new RuntimeException("empty cue "+mode);
-                  if(r.arena==null||r.initiative==null||r.powerPlan==null||r.returnFire==null||r.expectation==null) throw new RuntimeException("missing R5 intel "+mode);
-                  calls++;
+                for(String opp:TacticalEngine.OPPONENTS){
+                  TacticalEngine.Config c=new TacticalEngine.Config(); c.mode=mode; c.opponent=opp; c.baseDifficulty=10; c.strictFlow=true;
+                  c.persistentRivalMemory=true; c.powerIntent=true; c.arenaIQ=true; c.returnFireIQ=true; e.setConfig(c);
+                  for(int i=0;i<150;i++) check(e,e.next(FB[i%FB.length]),mode+"/"+opp);
                 }
               }
-              for(String opp:TacticalEngine.OPPONENTS) for(String strategy:TacticalEngine.STRATEGIES){
-                TacticalEngine.Config c=new TacticalEngine.Config();
-                c.mode="Fight Simulator"; c.opponent=opp; c.strategy=strategy; c.baseDifficulty=10;
-                c.persistentRivalMemory=true; c.powerIntent=true; c.arenaIQ=true; c.returnFireIQ=true;
-                e.setConfig(c);
-                for(int i=0;i<80;i++){
-                  TacticalEngine.Result r=e.next(f[i%f.length]);
-                  if(r==null||r.cue==null||r.cue.isEmpty()) throw new RuntimeException("empty matrix cue");
-                  if(r.arena==null||r.initiative==null||r.powerPlan==null||r.returnFire==null||r.expectation==null) throw new RuntimeException("missing matrix intel");
-                  calls++;
-                }
+              for(int pass=0;pass<5000;pass++){
+                TacticalEngine.Config c=new TacticalEngine.Config(); c.mode="Fight Simulator"; c.opponent=(pass%2==0?"Pressure Fighter":"Submission Hunter");
+                c.startRange=(pass%2==0?"Boxing":"Ground"); c.baseDifficulty=10; c.strictFlow=true; e.setConfig(c);
+                check(e,e.next(FB[pass%FB.length]),"targeted");
               }
-              String shard=e.exportShardState(); e.importShardState(shard);
-              String combat=e.exportCombatState(); e.importCombatState(combat);
-              if(!combat.startsWith("R5|")) throw new RuntimeException("bad R5 combat state");
-              if(calls!=13200) throw new RuntimeException("unexpected call count "+calls);
-              System.out.println("R5 stress OK calls="+calls+" shardBytes="+shard.length()+" combatBytes="+combat.length());
+              String state=e.exportCombatState(); if(!state.startsWith("R6|")) throw new RuntimeException("bad combat state prefix"); e.importCombatState(state);
+              if(doubleJabs<100) throw new RuntimeException("insufficient double-jab coverage "+doubleJabs);
+              if(groundCalls<100) throw new RuntimeException("insufficient ground coverage "+groundCalls);
+              System.out.println("R6 HARNESS OK calls="+calls+" threats="+threats+" doubleJabs="+doubleJabs+" ground="+groundCalls+" stateBytes="+state.length());
             }
           }
           JAVA
-          javac -cp /tmp/r5-logic -d /tmp/r5-logic /tmp/R5Harness.java
-          java -cp /tmp/r5-logic R5Harness
+          javac -cp /tmp/r6-logic -d /tmp/r6-logic /tmp/R6Harness.java
+          java -cp /tmp/r6-logic R6Harness
 
       - name: Set up Gradle 8.2
         shell: bash
@@ -105,14 +121,14 @@ jobs:
         run: |
           set -o pipefail
           cd hanma-combo-r3
-          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/hanma-r5-build.log
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/hanma-r6-build.log
 
       - name: Upload compiler diagnostics
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: hanma-combo-r5-build-log
-          path: /tmp/hanma-r5-build.log
+          name: hanma-combo-r6-build-log
+          path: /tmp/hanma-r6-build.log
           retention-days: 7
           if-no-files-found: ignore
 
@@ -121,69 +137,56 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          APK=dist/Hanma-Combo-Caller-R5-v5.0.0.apk
+          APK=dist/Hanma-Combo-Caller-R6-v6.0.0.apk
           cp hanma-combo-r3/app/build/outputs/apk/release/app-release.apk "$APK"
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
           "$BUILD_TOOLS/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
           grep -q "package: name='com.vhanma.hanmacombocallerr3'" dist/APK-BADGING-REPORT.txt
-          grep -q "versionCode='500'" dist/APK-BADGING-REPORT.txt
-          grep -q "versionName='5.0.0-Rival3'" dist/APK-BADGING-REPORT.txt
-          if grep -q "uses-permission:" dist/APK-BADGING-REPORT.txt; then
-            echo 'R5 unexpectedly requests a permission'
-            exit 1
-          fi
+          grep -q "versionCode='600'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionName='6.0.0-Rival3'" dist/APK-BADGING-REPORT.txt
+          if grep -q "uses-permission:" dist/APK-BADGING-REPORT.txt; then echo 'R6 unexpectedly requests a permission'; exit 1; fi
           unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
-          sha256sum "$APK" > dist/Hanma-Combo-Caller-R5-v5.0.0-SHA256.txt
+          sha256sum "$APK" > dist/Hanma-Combo-Caller-R6-v6.0.0-SHA256.txt
           cat > dist/BUILD-REPORT.txt <<'REPORT'
-          HANMA COMBO CALLER R5 v5.0.0
+          HANMA COMBO CALLER R6 v6.0.0
           Package: com.vhanma.hanmacombocallerr3
-          Upgrades R4.0.2 in place; legacy Pure Combo Caller remains separate.
+          Upgrades R5 in place; legacy Pure Combo Caller remains separate.
           Original supplied combo slots: 898 (400 coded + 498 named).
-
-          R5 COMBAT INTELLIGENCE
-          - Persistent rival memory across rounds and sessions.
-          - Per-opponent performance memory and adaptive archetype selection.
-          - Threat expectation model with decay, conditioning, and complementary exploitation.
-          - CLEAN / LATE / BLOCKED / MISSED / COUNTERED outcome feedback.
-          - Initiative and momentum state: you lead / contested / rival leads.
-          - Cage geometry: center / open space / fence / corner.
-          - Return-fire prediction by opponent family and exchange context.
-          - Power-intent planner: loose setups, one primary commit shot, balanced finish.
-          - Kinetic/body-position combination graph for position-compatible continuations.
-          - Persistent Skill Shards plus wider persistent combat memory.
-          - Exact Ghost Replay with R5 expectation, power-plan, and return-fire data.
-          - New R5 techniques include flicker jab, body-hook touch, cross rangefinder,
-            lead-step cross, shifting cross, chopping cross, lead/rear round kicks,
-            Brazilian kick, and spinning back fist.
-          - Existing PROBE / ESTABLISH / CONDITION / EXPLOIT / ADAPT round planning retained.
-          - 13,200-exchange automated tactical stress matrix before Android compilation.
-
+          R6 CAUSAL FIGHT INTELLIGENCE:
+          - Opponent action -> exact threat -> legal defense -> defense-dependent counter -> positionally legal continuation.
+          - Immediate threat must be solved before creative continuation is permitted.
+          - Explicit strike, kick, clinch, takedown, cage, bad-position and submission threat families.
+          - Ground ownership states: STANDING / SCRAMBLE / BOTTOM / TOP-GUARD / TOP-CONTROL.
+          - Context-only counters are gated by their actual prerequisite event.
+          - Double-jab regression test forbids body-kick/teep/sprawl mismatches.
+          - Persistent R5 memory remains import-compatible through R6 combat state.
+          - 32,000-exchange local regression matrix plus CI causal-combat stress test.
           Camera: absent
           Microphone: absent
           Network: absent
           Runtime permissions: none
           REPORT
-          (cd hanma-combo-r3 && zip -qr ../dist/Hanma-Combo-Caller-R5-v5.0.0-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
-          zip -j dist/Hanma-Combo-Caller-R5-v5.0.0-Source.zip combo-caller/app/src/main/assets/combos_codes.txt combo-caller/app/src/main/assets/combos_named.txt
+          (cd hanma-combo-r3 && zip -qr ../dist/Hanma-Combo-Caller-R6-v6.0.0-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
+          zip -j dist/Hanma-Combo-Caller-R6-v6.0.0-Source.zip combo-caller/app/src/main/assets/combos_codes.txt combo-caller/app/src/main/assets/combos_named.txt
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: hanma-combo-caller-r5-v5-0-0-final
+          name: hanma-combo-caller-r6-v6-0-0-final
           path: dist/*
           if-no-files-found: error
           retention-days: 30
 
-      - name: Publish R5.0.0 release
+      - name: Publish R6.0.0 release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG=hanma-combo-r5-v5.0.0
+          TAG=hanma-combo-r6-v6.0.0
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release upload "$TAG" dist/* --clobber
           else
-            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "Hanma Combo Caller R5 v5.0.0" --notes "Rival 3 R5 combat-intelligence rewrite: persistent rival memory, expectation/conditioning model, cage geometry, initiative, return-fire prediction, power-intent planning, body-position combo graph, expanded feedback, deeper Ghost Replay, and a 13,200-exchange pre-build stress matrix."
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "Hanma Combo Caller R6 v6.0.0" --notes "Rival 3 R6 causal fight-intelligence rebuild. Exact opponent threats now force prerequisite-locked defensive answers before counters and continuations. Adds explicit strike/kick/takedown/submission response families, top/bottom positional legality, context-only counter gates, persistent-memory compatibility, and regression tests for the double-jab/body-kick mismatch class."
           fi

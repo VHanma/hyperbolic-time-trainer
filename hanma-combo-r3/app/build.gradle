@@ -10,8 +10,8 @@ android {
         applicationId 'com.vhanma.hanmacombocallerr3'
         minSdk 23
         targetSdk 34
-        versionCode 500
-        versionName '5.0.0-Rival3'
+        versionCode 600
+        versionName '6.0.0-Rival3'
     }
 
     sourceSets {
@@ -33,4 +33,4 @@ android {
     }
 }
 
-// R5 atomic source payload is SHA-verified by CI before compilation.
+// R6 causal-combat source payload is SHA-verified by CI before compilation.
