@@ -1,0 +1,56 @@
+
+-        addA("rear uppercut look → rear hook",Range.POCKET,Range.POCKET,Side.REAR,Side.LEAD,7,6,200,"MORPH","HEAD");
++        addA("lead uppercut morphs to lead hook",Range.POCKET,Range.POCKET,Side.LEAD,Side.REAR,6,5,190,"MORPH","HEAD");
++        addA("rear uppercut morphs to rear hook",Range.POCKET,Range.POCKET,Side.REAR,Side.LEAD,7,6,200,"MORPH","HEAD");
+         addA("inside low kick",Range.BOXING,Range.LONG,Side.LEAD,Side.REAR,5,5,200,"DISRUPT_BASE","LEG");
+         addA("rear calf kick",Range.LONG,Range.LONG,Side.REAR,Side.LEAD,7,9,260,"DISRUPT_BASE","LEG");
+         addA("rear body kick",Range.LONG,Range.LONG,Side.REAR,Side.LEAD,8,11,300,"DAMAGE","BODY");
+@@ -374,6 +401,7 @@
+     }
+ 
+     private void applyAction(SimState s,Action a){
++        Range before=s.range;
+         s.range=a.end; s.loaded=a.loads; s.mobilityDebt=Math.min(35,Math.max(0,s.mobilityDebt+a.mobilityCost-4));
+         s.balance=Math.max(40,Math.min(100,s.balance-a.commitment/2+2));
+         s.guard=Math.max(45,Math.min(100,s.guard-a.commitment/3+1));
+@@ -382,6 +410,28 @@
+         if(a.target.equals("BODY"))opponentBeliefs.put("BODY",Math.min(100,opponentBeliefs.getOrDefault("BODY",0)+4));
+         if(a.target.equals("HEAD"))opponentBeliefs.put("HEAD",Math.min(100,opponentBeliefs.getOrDefault("HEAD",0)+3));
+         userHabits.put(a.name, userHabits.getOrDefault(a.name,0)+1);
++        String ctx=before.name()+"@"+a.name;
++        contextHabits.put(ctx,contextHabits.getOrDefault(ctx,0)+1);
++    }
++
++    private boolean noveltyLegal(Action a,List<Action> out){
++        int morphs=0;
++        for(Action prior:out){
++            if(prior.name.equals(a.name)) return false; // exact repeats never add information
++            if(prior.role.equals("MORPH")) morphs++;
++        }
++        if(a.role.equals("MORPH") && morphs>0) return false; // one trajectory change per exchange
++        if(out.size()>=2 && out.get(out.size()-2).name.equals(a.name)) return false; // kill A-B-A oscillation
++        return true;
++    }
++
++    private int nextWindow(Action a){
++        if(a.role.equals("PROBE")||a.role.equals("FEINT")||a.role.equals("DRAW")) return 260;
++        if(a.role.equals("ANGLE")||a.role.equals("CONTROL")) return 250;
++        if(a.role.equals("TAKEDOWN")||a.role.equals("ESCAPE")) return 300;
++        if(a.role.equals("MORPH")) return 190;
++        if(a.role.equals("FINISH")) return 180;
++        return 220;
+     }
+ 
+     private List<Action> plan(Event e,Defense d,String purpose){
+@@ -389,19 +439,36 @@
+         List<Action> out=new ArrayList<>();
+         int depth = cfg.difficulty>=9?4:cfg.difficulty>=6?3:2;
+         int window=e.window;
++        int cumulativeCommitment=0;
++        int cumulativeDebt=0;
+         for(int step=0;step<depth;step++){
+             Action best=null; int bestScore=Integer.MIN_VALUE;
+             for(Action a:actions){
++                if(!noveltyLegal(a,out)) continue;
+                 int sc=actionScore(a,sim,window,purpose);
+-                i
