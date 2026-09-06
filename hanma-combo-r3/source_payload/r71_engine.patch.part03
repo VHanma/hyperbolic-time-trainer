@@ -1,0 +1,50 @@
+tring(prefix.length());}
++        }
+         String next=p.isEmpty()?"RESET":p.get(0).name;
+-        return "HE EXPECTS: "+expect+" • YOU LOADED: "+loaded+" • PURPOSE: "+purpose+" • BEST LANE: "+next+" • GHOST READ: "+habit;
++        return "HE EXPECTS: "+expect+" • YOU LOADED: "+loaded+" • PURPOSE: "+purpose+" • BEST LANE: "+next+" • GHOST READ @ "+st.range+": "+habit;
+     }
+ 
+     private String whyText(Event e,Defense d,List<Action> p,String purpose){
+@@ -441,7 +512,7 @@
+         b.append("\nWHY → ").append(d.mechanic);
+         b.append("\nMECHANICS → loads ").append(d.load).append(", range ").append(d.endRange);
+         b.append("\nPURPOSE → ").append(purpose);
+-        if(!p.isEmpty()) b.append("\nCOUNTER WINDOW → ").append(e.window).append(" ms class; first attack ").append(p.get(0).name);
++        if(!p.isEmpty()) b.append("\nINITIAL COUNTER WINDOW → ").append(e.window).append(" ms class; first attack ").append(p.get(0).name);
+         b.append("\nRESULT → ").append(p.isEmpty()?d.endRange:p.get(p.size()-1).end);
+         if(!p.isEmpty()) b.append("\nPRIMITIVES → ").append(primitiveTrace(p.get(0)));
+         if(cfg.counterfactuals) b.append("\nCOUNTERFACTUALS → shell / pull / shot / return-fire branches scored before call");
+@@ -499,15 +570,42 @@
+     public String exportCombatState(){
+         StringBuilder b=new StringBuilder("R7|");
+         b.append(st.range).append('|').append(st.loaded).append('|').append(st.balance).append('|').append(st.guard).append('|').append(st.mobilityDebt).append('|').append(st.initiative);
+-        b.append("|BEL:"); for(Map.Entry<String,Integer>x:opponentBeliefs.entrySet()) b.append(x.getKey()).append('=').append(x.getValue()).append(',');
+-        b.append("|HAB:"); for(Map.Entry<String,Integer>x:userHabits.entrySet()) b.append(x.getKey().replace(',','_')).append('=').append(x.getValue()).append(',');
++        appendMap(b,"BEL",opponentBeliefs);
++        appendMap(b,"HAB",userHabits);
++        appendMap(b,"CTX",contextHabits);
++        appendMap(b,"CRD",actionCredit);
+         return b.toString();
+     }
+ 
++    private void appendMap(StringBuilder b,String label,Map<String,Integer> m){
++        b.append('|').append(label).append(':');
++        for(Map.Entry<String,Integer>x:m.entrySet()){
++            String k=x.getKey().replace('|','_').replace(',','_').replace('=','_');
++            b.append(k).append('=').append(x.getValue()).append(',');
++        }
++    }
++
++    private void readMap(String body,Map<String,Integer> out){
++        if(body==null||body.isEmpty())return;
++        for(String item:body.split(",")){
++            int eq=item.lastIndexOf('='); if(eq<=0)continue;
++            try{out.put(item.substring(0,eq),Integer.parseInt(item.substring(eq+1)));}catch(Exception ignored){}
++        }
++    }
++
+     public void importCombatState(String s){
+         if(s==null||!s.startsWith("R7|")) return;
+         try{
+-            String[] p=s.split("\\|",-1); st.range=Range.va
