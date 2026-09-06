@@ -1,0 +1,57 @@
+--- a/TacticalEngine.java
++++ b/TacticalEngine.java
+@@ -7,7 +7,7 @@
+  * Pure Java by design so CI can hammer the intelligence without Android.
+  */
+ public final class TacticalEngine {
+-    public static final String ENGINE_NAME = "R7 Ω FIGHT SIMULATOR";
++    public static final String ENGINE_NAME = "R7.1 Ω FIGHT SIMULATOR";
+ 
+     public static final String[] MODES = {
+             "Ω Fight Simulator", "Branching Spar", "Counter Lab", "Pressure Hunt",
+@@ -110,6 +110,8 @@
+     private final List<Action> actions = new ArrayList<>();
+     private final Map<String,Integer> opponentBeliefs = new HashMap<>();
+     private final Map<String,Integer> userHabits = new HashMap<>();
++    // Habits indexed by the range where they were actually available. This keeps Ghost reads contextual.
++    private final Map<String,Integer> contextHabits = new HashMap<>();
+     private final Map<String,Integer> actionCredit = new HashMap<>();
+     private Config cfg = new Config();
+     private SimState st = new SimState();
+@@ -131,6 +133,31 @@
+     public String getGroundState(){return st.range.name();}
+     public boolean lastResponseSolvedThreat(){ return lastThreat==Threat.NONE || (lastDefense!=null && lastDefense.threat==lastThreat); }
+ 
++    /**
++     * Convert visual/legacy notation into words a TTS engine should actually say.
++     * Visual chain arrows mean sequence, while legacy /R/ and /L/ tokens mean slips.
++     */
++    public static String toSpeech(String raw){
++        if(raw==null)return "";
++        String s=raw;
++        s=s.replace("/R/"," slip right ").replace("/L/"," slip left ");
++        s=s.replace("←"," slip left ");
++        s=s.replace("→",", then ").replace("➜",", then ").replace("➡",", then ");
++        s=s.replace("1-2","one two");
++        s=s.replace("Ω","Omega");
++        s=s.replaceAll("\\s+", " ").replaceAll("\\s+,", ",").trim();
++        s=s.replaceAll(",\\s*,+", ", ");
++        return s;
++    }
++
++    public boolean lastPlanHasLoop(){
++        Set<String> seen=new HashSet<>();
++        for(Action a:lastPlan){ if(!seen.add(a.name)) return true; }
++        for(int i=2;i<lastPlan.size();i++) if(lastPlan.get(i).name.equals(lastPlan.get(i-2).name)) return true;
++        return false;
++    }
++    public int lastPlanMorphCount(){int n=0;for(Action a:lastPlan)if(a.role.equals("MORPH"))n++;return n;}
++
+     private void resetRoundState(){
+         st=new SimState(); st.range=parseRange(cfg.startRange); exchange=0; lastThreat=Threat.NONE; lastDefense=null; lastPlan=Collections.emptyList();
+     }
+@@ -206,8 +233,8 @@
+         addA("lead hook liver",Range.POCKET,Range.POCKET,Side.LEAD,Side.REAR,7,6,190,"DAMAGE","BODY");
+         addA("rear uppercut",Range.POCKET,Range.POCKET,Side.REAR,Side.LEAD,7,7,190,"DAMAGE","HEAD");
+         addA("lead uppercut",Range.POCKET,Range.POCKET,Side.LEAD,Side.REAR,6,6,180,"DRAW","HEAD");
+-        addA("lead uppercut look → lead hook",Range.POCKET,Range.POCKET,Side.LEAD,Side.REAR,6,5,190,"MORPH","HEAD");
