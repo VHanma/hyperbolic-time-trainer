@@ -1,0 +1,44 @@
+f(step>0 && a.name.equals(sim.lastUserAction)) sc-=40;
++                if(step>0 && a.name.equals(sim.lastUserAction)) sc-=60;
++                if(!out.isEmpty()){
++                    Action prev=out.get(out.size()-1);
++                    if(prev.target.equals(a.target) && (a.role.equals("DAMAGE")||a.role.equals("FINISH"))) sc-=8;
++                    if(prev.role.equals(a.role) && (a.role.equals("FEINT")||a.role.equals("DRAW")||a.role.equals("MORPH"))) sc-=14;
++                }
++                // Once the exchange has spent significant posture/mobility, favor exits/control instead of greed.
++                if(cumulativeCommitment>=14 && !(a.role.equals("ANGLE")||a.role.equals("CONTROL")||a.role.equals("PROBE"))) sc-=18;
++                if(cumulativeDebt>=16 && a.mobilityCost>=7) sc-=18;
+                 if(sc>bestScore){bestScore=sc;best=a;}
+             }
+-            if(best==null||bestScore<-40)break;
+-            out.add(best); applyAction(sim,best);
+-            window += 90; // successful first answer can create the next window
+-            if(best.role.equals("TAKEDOWN")||best.role.equals("ESCAPE")) break;
++            int floor = step==0 ? -20 : (step==1 ? 18 : 34);
++            if(best==null||bestScore<floor)break;
++            // A third/fourth action has to earn its place. Stop instead of padding a legal but pointless chain.
++            if(step>=2 && cumulativeCommitment>=18 && !(best.role.equals("ANGLE")||best.role.equals("CONTROL"))) break;
++            out.add(best);
++            cumulativeCommitment += best.commitment;
++            cumulativeDebt += best.mobilityCost;
++            applyAction(sim,best);
++            window = nextWindow(best);
++            if(best.role.equals("TAKEDOWN")||best.role.equals("ESCAPE")||best.role.equals("FINISH")) break;
+         }
+-        // hard biomechanical continuity patches drawn from source docs
++        // Hard biomechanical continuity patches drawn from source docs.
+         if(d.name.contains("sprawl") && sim.range==Range.SHOT){
+             Action go=findAction("front headlock go-behind"); if(go!=null){out.clear();out.add(go);}
+         }
+@@ -427,11 +494,15 @@
+     }
+ 
+     private String mindText(String purpose,List<Action> p){
+-        String expect = opponentBeliefs.getOrDefault("HEAD",0) > opponentBeliefs.getOrDefault("BODY",0) ? "HEAD" : "BODY";
++        int head=opponentBeliefs.getOrDefault("HEAD",0), body=opponentBeliefs.getOrDefault("BODY",0);
++        String expect=(Math.max(head,body)<8||Math.abs(head-body)<4)?"UNCERTAIN":(head>body?"HEAD":"BODY");
+         String loaded=st.loaded.name();
+-        String habit="NONE"; int hv=0; for(Map.Entry<String,Integer>x:userHabits.entrySet())if(x.getValue()>hv){hv=x.getValue();habit=x.getKey();}
++        String habit="NONE"; int hv=0; String prefix=st.range.name()+"@";
++        for(Map.Entry<String,Integer>x:contextHabits.entrySet()){
++            if(x.getKey().startsWith(prefix)&&x.getValue()>hv){hv=x.getValue();habit=x.getKey().subs
