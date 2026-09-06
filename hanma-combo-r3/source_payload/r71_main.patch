@@ -1,0 +1,38 @@
+--- a/MainActivity.java
++++ b/MainActivity.java
+@@ -80,7 +80,7 @@
+     private void showSetup(){
+         ScrollView sc=new ScrollView(this);sc.setFillViewport(true);sc.setBackgroundColor(BG);
+         root=new LinearLayout(this);root.setOrientation(LinearLayout.VERTICAL);root.setPadding(dp(16),dp(18),dp(16),dp(24));root.setBackgroundColor(BG);sc.addView(root);
+-        TextView title=tv("R7 Ω FIGHT SIMULATOR",28,RED,true);title.setGravity(Gravity.CENTER);root.addView(title);
++        TextView title=tv("R7.1 Ω FIGHT SIMULATOR",28,RED,true);title.setGravity(Gravity.CENTER);root.addView(title);
+         TextView sub=tv("Mechanics ledger • opponent beliefs • counterfactual planning • causal fight graph",14,CYAN,false);sub.setGravity(Gravity.CENTER);root.addView(sub);
+ 
+         modeSpin=spinner(TacticalEngine.MODES); oppSpin=spinner(TacticalEngine.OPPONENTS);
+@@ -119,7 +119,7 @@
+         ScrollView sc=new ScrollView(this);sc.setFillViewport(true);sc.setBackgroundColor(BG);
+         fightBox=new LinearLayout(this);fightBox.setOrientation(LinearLayout.VERTICAL);fightBox.setPadding(dp(12),dp(10),dp(12),dp(20));fightBox.setBackgroundColor(BG);sc.addView(fightBox);
+         LinearLayout top=row();
+-        TextView title=tv("R7 Ω FIGHT INTELLIGENCE",20,RED,true);timer=tv("05:00",18,MUTED,true);timer.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
++        TextView title=tv("R7.1 Ω FIGHT INTELLIGENCE",20,RED,true);timer=tv("05:00",18,MUTED,true);timer.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
+         top.addView(title,lp(0,dp(54),1));top.addView(timer,lp(0,dp(54),0.45f));fightBox.addView(top);
+ 
+         LinearLayout chips=row();phase=tv("PHASE • PROBE",14,RED,true);pressure=tv("INITIATIVE • 0",14,ORANGE,true);phase.setGravity(Gravity.CENTER);pressure.setGravity(Gravity.CENTER);phase.setBackground(box(PANEL,EDGE,14));pressure.setBackground(box(PANEL,EDGE,14));chips.addView(phase,lp(0,dp(52),1));chips.addView(pressure,lp(0,dp(52),1));fightBox.addView(chips);
+@@ -152,7 +152,7 @@
+             cue.setText(current.cue);
+             state.setText(current.state);
+             mind.setText("Ω MIND • "+current.mind);
+-            reply.setText("LIKELY REPLY • "+current.expectedReply+"   |   WINDOW • "+current.windowMs+"ms");
++            reply.setText("LIKELY REPLY • "+current.expectedReply+"   |   FIRST COUNTER WINDOW • "+current.windowMs+"ms");
+             phase.setText("PURPOSE • "+current.purpose);
+             pressure.setText("RIVAL • "+engine.getConfig().opponent);
+             why.setText(current.why);
+@@ -164,7 +164,7 @@
+ 
+     private void speakCurrent(){
+         if(!ttsReady||current==null)return;tts.stop();
+-        String text=current.opponentEvent+". "+current.cue;
++        String text=TacticalEngine.toSpeech(current.opponentEvent)+". Answer. "+TacticalEngine.toSpeech(current.cue);
+         tts.speak(text,TextToSpeech.QUEUE_FLUSH,null,"omega_call");
+     }
+ 
