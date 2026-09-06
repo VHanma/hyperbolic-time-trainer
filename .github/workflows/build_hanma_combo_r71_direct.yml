@@ -1,0 +1,180 @@
+name: Build Hanma Combo Caller R7.1 Omega Direct APK
+
+on:
+  push:
+    branches: [ hanma-combo-r3 ]
+    paths:
+      - 'hanma-combo-r3/source_payload/MainActivity.v710.part*'
+      - 'hanma-combo-r3/source_payload/TacticalEngine.v710.part*'
+      - '.github/workflows/build_hanma_combo_r71_direct.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Materialize exact R7.1 Omega source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_codes.txt)" -eq 400
+          test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          mkdir -p "$SRC"
+          cat hanma-combo-r3/source_payload/TacticalEngine.v710.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
+          cat hanma-combo-r3/source_payload/MainActivity.v710.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
+          echo '5fac49868bb84395c69ae16e2c94bb5f1d81e0083ed2eb56c5664df5a2cd7a47  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java' | sha256sum -c -
+          echo '43ed755b53781cbb7d17a9ee7c58e2ec2a59aa9279f0551bac17b3056e79b8e5  hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java' | sha256sum -c -
+          sed -i "s/versionCode 700/versionCode 710/; s/versionName '7.0.0-Omega'/versionName '7.1.0-Omega'/" hanma-combo-r3/app/build.gradle
+          sed -i 's/Hanma Combo Caller R7 Ω/Hanma Combo Caller R7.1 Ω/' hanma-combo-r3/app/src/main/AndroidManifest.xml
+          grep -q 'R7.1 Ω FIGHT SIMULATOR' "$SRC/TacticalEngine.java"
+          grep -q 'R7.1 Ω FIGHT INTELLIGENCE' "$SRC/MainActivity.java"
+          grep -q 'toSpeech' "$SRC/TacticalEngine.java"
+          grep -q 'contextHabits' "$SRC/TacticalEngine.java"
+          grep -q 'lastPlanHasLoop' "$SRC/TacticalEngine.java"
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: R7.1 Omega speech and fight-IQ stress test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/r71logic
+          javac -d /tmp/r71logic hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java
+          cat > /tmp/R71Harness.java <<'JAVA'
+          import com.vhanma.hanmacombocallerr3.TacticalEngine;
+          import java.util.*;
+          public class R71Harness {
+            static final String[] FB={"RESET","CLEAN","LATE","BLOCKED","MISSED","COUNTERED","CLEAN"};
+            static long calls=0,dj=0,morph=0;
+            static void check(TacticalEngine e,TacticalEngine.Result r){
+              if(r==null||r.cue==null||r.cue.trim().isEmpty())throw new RuntimeException("empty cue");
+              if(!"Pure Library".equals(e.getConfig().mode)){
+                if(!e.lastResponseSolvedThreat())throw new RuntimeException("unsolved "+e.getLastThreat()+" | "+r.cue);
+                if(e.lastPlanHasLoop())throw new RuntimeException("planner loop "+r.cue);
+                if(e.lastPlanMorphCount()>1)throw new RuntimeException("multi morph "+r.cue);
+                if(e.lastPlanMorphCount()>0)morph++;
+                String speech=TacticalEngine.toSpeech(r.opponentEvent+". "+r.cue);
+                if(speech.contains("→")||speech.contains("←")||speech.contains("/R/")||speech.contains("/L/"))throw new RuntimeException("speech notation leak "+speech);
+                String ev=r.opponentEvent.toLowerCase(Locale.US),c=r.cue.toLowerCase(Locale.US);
+                if(ev.contains("double jab")){
+                  dj++;
+                  if(!(c.startsWith("catch first jab, slip second")||c.startsWith("double parry jabs")||c.startsWith("step outside double jab")))throw new RuntimeException("double jab mismatch "+r.cue);
+                }
+                if(r.mind.contains("GHOST READ @ POCKET: rear naked choke"))throw new RuntimeException("context ghost leak "+r.mind);
+              }
+              calls++;
+            }
+            public static void main(String[] args){
+              String sp=TacticalEngine.toSpeech("/R/-2 /L/-3 jab → cross ← reset");
+              if(!sp.contains("slip right")||!sp.contains("slip left")||sp.contains("→")||sp.contains("←"))throw new RuntimeException("direction parser "+sp);
+              TacticalEngine e=new TacticalEngine(Arrays.asList("Jab, Cross","Jab, Hook"),Arrays.asList("1-2","/R/-2"));
+              String v=e.validateKnowledge();if(!v.isEmpty())throw new RuntimeException(v);
+              for(String mode:TacticalEngine.MODES)for(String opp:TacticalEngine.OPPONENTS)for(String range:new String[]{"Boxing","Long","Pocket","Clinch","Ground","Top"}){
+                TacticalEngine.Config c=new TacticalEngine.Config();c.mode=mode;c.opponent=opp;c.startRange=range;c.difficulty=10;e.setConfig(c);
+                for(int i=0;i<240;i++)check(e,e.next(FB[i%FB.length]));
+              }
+              TacticalEngine.Config c=new TacticalEngine.Config();c.mode="Ω Fight Simulator";c.startRange="Boxing";c.difficulty=10;e.setConfig(c);
+              for(int i=0;i<2000;i++)check(e,e.next(FB[i%FB.length]));
+              String s=e.exportCombatState();
+              if(!(s.contains("|BEL:")&&s.contains("|HAB:")&&s.contains("|CTX:")&&s.contains("|CRD:")))throw new RuntimeException("persistence maps missing");
+              TacticalEngine e2=new TacticalEngine(Arrays.asList("Jab, Cross"),Arrays.asList("1-2"));e2.importCombatState(s);
+              if(e2.exportCombatState().length()<100)throw new RuntimeException("state restore failed");
+              if(dj<200)throw new RuntimeException("low double jab coverage "+dj);
+              if(calls<117000)throw new RuntimeException("low exchange coverage "+calls);
+              System.out.println("R7.1 OMEGA HARNESS OK calls="+calls+" doubleJab="+dj+" morph="+morph+" stateBytes="+s.length()+" speech="+sp);
+            }
+          }
+          JAVA
+          javac -cp /tmp/r71logic -d /tmp/r71logic /tmp/R71Harness.java
+          java -cp /tmp/r71logic R71Harness
+
+      - name: Set up Gradle 8.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          cd hanma-combo-r3
+          /tmp/gradle-dist/gradle-8.2/bin/gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+
+      - name: Build release APK
+        shell: bash
+        run: |
+          set -o pipefail
+          cd hanma-combo-r3
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/hanma-r71-direct-build.log
+
+      - name: Upload compiler diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-combo-r71-direct-build-log
+          path: /tmp/hanma-r71-direct-build.log
+          retention-days: 7
+          if-no-files-found: ignore
+
+      - name: Verify and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK=dist/Hanma-Combo-Caller-R7.1-Omega-v7.1.0.apk
+          cp hanma-combo-r3/app/build/outputs/apk/release/app-release.apk "$APK"
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BUILD_TOOLS/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
+          grep -q "package: name='com.vhanma.hanmacombocallerr3'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionCode='710'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionName='7.1.0-Omega'" dist/APK-BADGING-REPORT.txt
+          if grep -q "uses-permission:" dist/APK-BADGING-REPORT.txt; then echo 'R7.1 unexpectedly requests a permission'; exit 1; fi
+          unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
+          sha256sum "$APK" > dist/Hanma-Combo-Caller-R7.1-Omega-v7.1.0-SHA256.txt
+          cat > dist/BUILD-REPORT.txt <<'REPORT'
+          HANMA COMBO CALLER R7.1 OMEGA v7.1.0
+          Package: com.vhanma.hanmacombocallerr3
+          - TTS parser speaks /R/ as slip right and /L/ as slip left.
+          - Visual chain arrows are spoken as normal sequencing, never glyph names.
+          - Morph-loop firewall allows at most one morph and rejects repeated/A-B-A plans.
+          - Commitment/debt-aware early stopping removes padded legal-but-pointless chains.
+          - Ghost/Doppelganger habits are now range/context specific.
+          - FIRST COUNTER WINDOW distinguishes the initial opening from later windows.
+          - Beliefs, habits, contextual habits and delayed tactical credit restore across restarts.
+          - Original 898 supplied combo slots preserved.
+          Runtime permissions: none
+          REPORT
+          (cd hanma-combo-r3 && zip -qr ../dist/Hanma-Combo-Caller-R7.1-Omega-v7.1.0-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
+          zip -j dist/Hanma-Combo-Caller-R7.1-Omega-v7.1.0-Source.zip combo-caller/app/src/main/assets/combos_codes.txt combo-caller/app/src/main/assets/combos_named.txt
+
+      - name: Upload final package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-combo-caller-r71-omega-v7-1-0-final
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish R7.1 Omega release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=hanma-combo-r71-omega-v7.1.0
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "Hanma Combo Caller R7.1 Omega v7.1.0" --notes "Omega refinement: correct combat-language TTS, slip-right/slip-left legacy translation, morph/repetition-loop firewall, context-aware Ghost reads, realistic opening-window semantics, and complete learned-memory restoration."
+          fi
