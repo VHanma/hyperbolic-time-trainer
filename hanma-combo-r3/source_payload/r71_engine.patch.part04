@@ -1,0 +1,14 @@
+lueOf(p[1]); st.loaded=Side.valueOf(p[2]); st.balance=Integer.parseInt(p[3]); st.guard=Integer.parseInt(p[4]); st.mobilityDebt=Integer.parseInt(p[5]); st.initiative=Integer.parseInt(p[6]);
++            String[] p=s.split("\\|",-1);
++            st.range=Range.valueOf(p[1]); st.loaded=Side.valueOf(p[2]); st.balance=Integer.parseInt(p[3]); st.guard=Integer.parseInt(p[4]); st.mobilityDebt=Integer.parseInt(p[5]); st.initiative=Integer.parseInt(p[6]);
++            opponentBeliefs.clear(); userHabits.clear(); contextHabits.clear(); actionCredit.clear();
++            for(int i=7;i<p.length;i++){
++                if(p[i].startsWith("BEL:"))readMap(p[i].substring(4),opponentBeliefs);
++                else if(p[i].startsWith("HAB:"))readMap(p[i].substring(4),userHabits);
++                else if(p[i].startsWith("CTX:"))readMap(p[i].substring(4),contextHabits);
++                else if(p[i].startsWith("CRD:"))readMap(p[i].substring(4),actionCredit);
++            }
+         }catch(Exception ignored){}
+     }
++
+ }
