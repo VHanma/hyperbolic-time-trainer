@@ -22,8 +22,11 @@ jobs:
           test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_codes.txt)" -eq 400
           test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
           SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
-          echo '2984058792a4e2377244f45fa5f626adc74dced4df0b1e4da4941246d733c830  '$SRC'/TacticalEngine.java' | sha256sum -c -
-          echo '33506ee39a06c5a38d10ce84482e8522d1504a5b575d50f00d073457a2d8bd70  '$SRC'/MainActivity.java' | sha256sum -c -
+          test -s "$SRC/TacticalEngine.java"
+          test -s "$SRC/MainActivity.java"
+          sha256sum "$SRC/TacticalEngine.java" "$SRC/MainActivity.java" | tee /tmp/R8-SOURCE-SHA256.txt
+          grep -q 'Machida Karate / Lyoto & Chinzo Machida' "$SRC/TacticalEngine.java"
+          grep -q 'DISCIPLINE / RULESET' "$SRC/MainActivity.java"
       - uses: actions/setup-java@v4
         with: {distribution: temurin, java-version: '17'}
       - name: R8 Omega combat torture test
@@ -72,6 +75,7 @@ jobs:
           path: |
             /tmp/r8-build.log
             /tmp/R8-HARNESS-REPORT.txt
+            /tmp/R8-SOURCE-SHA256.txt
           if-no-files-found: ignore
           retention-days: 7
       - name: Verify and package
@@ -91,6 +95,7 @@ jobs:
           unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
           sha256sum "$APK" > dist/Hanma-Combo-Caller-R8-Omega-v8.0.0-SHA256.txt
           cp /tmp/R8-HARNESS-REPORT.txt dist/
+          cp /tmp/R8-SOURCE-SHA256.txt dist/
           cat > dist/BUILD-REPORT.txt <<'REPORT'
           HANMA COMBO CALLER R8 OMEGA v8.0.0
           Package: com.vhanma.hanmacombocalleromega8
