@@ -1,0 +1,29 @@
+name: Dump Hanma Combo R8 Recovered Source
+on:
+  push:
+    branches: [ hanma-combo-r3 ]
+    paths: [ '.github/workflows/dump_hanma_combo_r8_source.yml' ]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Recover source bodies
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p recovered
+          cat hanma-combo-r3/source_payload/TacticalEngine.v800.part* | base64 -d > /tmp/engine.gz
+          cat hanma-combo-r3/source_payload/MainActivity.v800.part* | base64 -d > /tmp/main.gz
+          gzip -dc /tmp/engine.gz > recovered/TacticalEngine.java 2>recovered/engine-gzip.err || true
+          gzip -dc /tmp/main.gz > recovered/MainActivity.java 2>recovered/main-gzip.err || true
+          wc -c recovered/* | tee recovered/sizes.txt
+          sha256sum recovered/*.java | tee recovered/sha256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r8-recovered-source
+          path: recovered/*
+          retention-days: 7
