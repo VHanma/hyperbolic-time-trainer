@@ -1,0 +1,111 @@
+name: Build Hanma Combo Caller R8 Omega Final Direct APK
+on:
+  push:
+    branches: [ hanma-combo-r3 ]
+    paths:
+      - 'hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/TacticalEngine.java'
+      - 'hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3/MainActivity.java'
+      - '.github/workflows/build_hanma_combo_r8_final_direct.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify R8 source and original library
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_codes.txt)" -eq 400
+          test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          echo '2984058792a4e2377244f45fa5f626adc74dced4df0b1e4da4941246d733c830  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          echo '33506ee39a06c5a38d10ce84482e8522d1504a5b575d50f00d073457a2d8bd70  '$SRC'/MainActivity.java' | sha256sum -c -
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: '17'}
+      - name: R8 Omega combat torture test
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          mkdir -p /tmp/r8
+          javac -d /tmp/r8 "$SRC/TacticalEngine.java"
+          cat > /tmp/R8Harness.java <<'JAVA'
+          import com.vhanma.hanmacombocallerr3.TacticalEngine;import java.util.*;
+          public class R8Harness{static long n=0;static final String[]F={"RESET","CLEAN","LATE","BLOCKED","MISSED","COUNTERED","CLEAN"};static boolean any(String s,String...x){s=s.toLowerCase();for(String q:x)if(s.contains(q))return true;return false;}static void ck(TacticalEngine e,TacticalEngine.Result r){if(r==null||r.cue.trim().isEmpty()||!e.lastResponseSolvedThreat())throw new RuntimeException("bad result");String sp=TacticalEngine.toSpeech(r.opponentEvent+" "+r.cue);if(sp.contains("→")||sp.contains("←")||sp.contains("/R/")||sp.contains("/L/"))throw new RuntimeException("tts leak");String ev=r.opponentEvent.toLowerCase(),c=r.cue.toLowerCase();if(ev.contains("double jab")&&!(c.startsWith("catch first jab, slip second")||c.startsWith("double parry jabs")||c.startsWith("step outside double jab")))throw new RuntimeException("double jab mismatch "+c);n++;}static Set<String>run(TacticalEngine e,String d,int z){TacticalEngine.Config c=new TacticalEngine.Config();c.discipline=d;c.difficulty=10;c.startRange="Boxing";e.setConfig(c);Set<String>u=new HashSet<>();for(int i=0;i<z;i++){TacticalEngine.Result r=e.next(F[i%F.length]);ck(e,r);u.add(r.cue);}return u;}public static void main(String[]a){TacticalEngine e=new TacticalEngine(Arrays.asList("Jab, Cross"),Arrays.asList("1-2","/R/-2"));if(!e.validateKnowledge().isEmpty())throw new RuntimeException(e.validateKnowledge());String sp=TacticalEngine.toSpeech("/R/ jab → cross /L/ hook");if(!sp.contains("slip right")||!sp.contains("slip left"))throw new RuntimeException("speech");for(String d:TacticalEngine.DISCIPLINES){TacticalEngine.Config c=new TacticalEngine.Config();c.discipline=d;c.difficulty=10;for(String o:TacticalEngine.OPPONENTS){c.opponent=o;for(String r:new String[]{"Long","Boxing","Pocket","Clinch","Ground"}){c.startRange=r;e.setConfig(c);for(int i=0;i<25;i++)ck(e,e.next(F[i%F.length]));}}}Set<String>b=run(e,"Boxing Only",5000);for(String c:b)if(any(c,"round kick","low kick","head kick","teep","knee","short horizontal elbow","double leg","single leg","armbar","triangle","kimura","rear naked","guillotine","ankle lock"))throw new RuntimeException("boxing leak "+c);Set<String>t=run(e,"Muay Thai",2500),m=run(e,"MMA",2500);boolean k=false,kn=false,el=false,cl=false;for(String c:t){k|=any(c,"kick","teep");kn|=c.contains("knee");el|=c.contains("elbow");cl|=any(c,"collar tie","clinch");}if(!(k&&kn&&el&&cl))throw new RuntimeException("thai breadth");boolean st=false,gr=false;for(String c:m){st|=any(c,"jab","cross","hook","kick","knee","elbow");gr|=any(c,"double leg","single leg","sprawl","underhook","pass","ride","trip");}if(!(st&&gr))throw new RuntimeException("mma breadth");String s=e.exportCombatState();TacticalEngine e2=new TacticalEngine(Arrays.asList("Jab"),Arrays.asList("1"));e2.importCombatState(s);if(e2.exportCombatState().length()<40)throw new RuntimeException("state");System.out.println("R8 OMEGA FINAL HARNESS OK calls="+n+" boxingUnique="+b.size()+" thaiUnique="+t.size()+" mmaUnique="+m.size()+" stateBytes="+s.length());}}
+          JAVA
+          javac -cp /tmp/r8 -d /tmp/r8 /tmp/R8Harness.java
+          java -cp /tmp/r8 R8Harness | tee /tmp/R8-HARNESS-REPORT.txt
+      - name: Set collision-free R8 package and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          sed -i 's/package com\.vhanma\.hanmacombocallerr3;/package com.vhanma.hanmacombocalleromega8;/' "$SRC/TacticalEngine.java" "$SRC/MainActivity.java"
+          sed -i "s/namespace 'com.vhanma.hanmacombocallerr3'/namespace 'com.vhanma.hanmacombocalleromega8'/" hanma-combo-r3/app/build.gradle
+          sed -i "s/applicationId 'com.vhanma.hanmacombocallerr3'/applicationId 'com.vhanma.hanmacombocalleromega8'/" hanma-combo-r3/app/build.gradle
+          sed -i "s/versionCode [0-9][0-9]*/versionCode 800/" hanma-combo-r3/app/build.gradle
+          sed -i "s/versionName '[^']*'/versionName '8.0.0-Omega'/" hanma-combo-r3/app/build.gradle
+          sed -i 's/Hanma Combo Caller R7\.1 Ω/Hanma Combo Caller R8 Ω/' hanma-combo-r3/app/src/main/AndroidManifest.xml
+      - name: Set up Gradle 8.2
+        shell: bash
+        run: |
+          curl -fL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          cd hanma-combo-r3
+          /tmp/gradle-dist/gradle-8.2/bin/gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+      - name: Build release APK
+        shell: bash
+        run: |
+          set -o pipefail
+          cd hanma-combo-r3
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/r8-build.log
+      - name: Upload diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-r8-final-build-log
+          path: |
+            /tmp/r8-build.log
+            /tmp/R8-HARNESS-REPORT.txt
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Verify and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK=dist/Hanma-Combo-Caller-R8-Omega-v8.0.0.apk
+          cp hanma-combo-r3/app/build/outputs/apk/release/app-release.apk "$APK"
+          BT="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BT/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BT/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
+          grep -q "package: name='com.vhanma.hanmacombocalleromega8'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionCode='800'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionName='8.0.0-Omega'" dist/APK-BADGING-REPORT.txt
+          if grep -q 'uses-permission:' dist/APK-BADGING-REPORT.txt; then exit 1; fi
+          unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
+          sha256sum "$APK" > dist/Hanma-Combo-Caller-R8-Omega-v8.0.0-SHA256.txt
+          cp /tmp/R8-HARNESS-REPORT.txt dist/
+          cat > dist/BUILD-REPORT.txt <<'REPORT'
+          HANMA COMBO CALLER R8 OMEGA v8.0.0
+          Package: com.vhanma.hanmacombocalleromega8
+          Runtime permissions: none
+          Original library preserved: 400 coded + 498 named = 898 slots
+          Strict discipline modes, causal threat defense, source doctrines, reaction branches, anti-repeat memory, ring state, conditioning, skill shards, Branching Spar and exact Ghost Replay.
+          REPORT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hanma-combo-caller-r8-omega-v8-0-0-final
+          path: dist/*
+          retention-days: 30
+      - name: Publish release
+        shell: bash
+        env: {GH_TOKEN: '${{ github.token }}'}
+        run: |
+          TAG=hanma-combo-r8-omega-v8.0.0
+          if gh release view "$TAG" >/dev/null 2>&1; then gh release upload "$TAG" dist/* --clobber; else gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "Hanma Combo Caller R8 Omega v8.0.0" --notes "R8 Omega all-source corpus fight engine with strict disciplines, dynamic causal branches, anti-repeat memory, ringcraft state, conditioning, shards, Branching Spar and Ghost Replay."; fi
