@@ -1,0 +1,122 @@
+package com.vhanma.hanmacombocallerr3;
+
+import java.util.*;
+
+/** R8 Omega corpus-driven combat planner. Pure Java so CI can torture-test the logic. */
+public final class TacticalEngine {
+    public static final String ENGINE_NAME = "R8 Ω CORPUS FIGHT ENGINE";
+
+    public static final String[] MODES = {
+            "Ω Fight Simulator","Branching Spar","Adaptive Fight IQ","Tactical Chain",
+            "Counter Lab","Pressure Hunt","Anti-Wrestler","Cage Chess",
+            "Condition & Betray","Ringcraft Round","Source Doctrine Lab",
+            "Biomechanics Lab","Skill Shards","Ghost Doppelganger","Pure Library"
+    };
+    public static final String[] DISCIPLINES = {
+            "Boxing Only","All Striking","Muay Thai","Kickboxing","MMA","Combat Sambo",
+            "Wrestling","No-Gi Grappling","Karate","52 Blocks Boxing","Hybrid Fight Lab",
+            "Anime Hybrid (Real Mechanics)"
+    };
+    public static final String[] OPPONENTS = {
+            "Adaptive Rival","Pressure Boxer","Southpaw Sniper","Counter Striker","Long Kicker",
+            "Muay Thai Clincher","Cage Wrestler","Submission Hunter","Switch Hitter","Dirty Boxer",
+            "Blitz Fighter","Attrition Kicker","Scramble Monster","High Guard Shell","Chaos Rival"
+    };
+    public static final String[] PROFILES = {
+            "Hanma Adaptive","Ilia Topuria","Prime Conor McGregor","Benny Urquidez","Bas Rutten",
+            "Jon Jones","Nick Diaz","Anderson Silva","Justin Gaethje","Sean O'Malley",
+            "Georges St-Pierre","Lyoto Machida","Alex Pereira","Demetrious Johnson","Max Holloway",
+            "Islam Makhachev","Petr Yan","Miyamoto Musashi","Sun Tzu","52 Blocks Sentinel","Niko Mechanics"
+    };
+    public static final String[] DOCTRINES = {
+            "Ω All-Source Fusion","User Combat/Biomechanics Docs","World Class Boxing / Tom Yankello",
+            "Sean Fagan","FIGHTTIPS","Jesse Enkamp","MMA Shredded / Jeff Chan",
+            "Precision Striking / Precision Boxing","The Punch Doctor","Trevor Wittman / Justin Gaethje",
+            "Benny Urquidez","Michael Jai White","52 Blocks","Modern Martial Artist / Power of the Pros",
+            "Combat Athlete Physio","Theo Tanchak","Glove Up Training","Phil Daru Strong",
+            "Baki / Kengan Mechanics","Miyamoto Musashi","Sun Tzu"
+    };
+
+    public static final class Config {
+        public String mode=MODES[0], discipline=DISCIPLINES[4], opponent=OPPONENTS[0], stance="Orthodox",
+                startRange="Boxing", profile=PROFILES[0], doctrine=DOCTRINES[0];
+        public int difficulty=9, revealDelayMs=1400;
+        public boolean strictFlow=true, opponentBelief=true, counterfactuals=true, doppelganger=true;
+    }
+
+    public static final class Result {
+        public final String opponentEvent,cue,state,why,mind,source,purpose,expectedReply,reaction,ring,shard,doctrine,pattern;
+        public final int windowMs;
+        public Result(String opponentEvent,String cue,String state,String why,String mind,String source,String purpose,
+                      String expectedReply,String reaction,String ring,String shard,String doctrine,String pattern,int windowMs){
+            this.opponentEvent=opponentEvent;this.cue=cue;this.state=state;this.why=why;this.mind=mind;this.source=source;
+            this.purpose=purpose;this.expectedReply=expectedReply;this.reaction=reaction;this.ring=ring;this.shard=shard;
+            this.doctrine=doctrine;this.pattern=pattern;this.windowMs=windowMs;
+        }
+    }
+
+    private enum Range {LONG,BOXING,POCKET,CLINCH,SHOT,SCRAMBLE,BOTTOM,TOP_GUARD,TOP_CONTROL}
+    private enum Side {LEAD,REAR,CENTER,NONE}
+    private enum Threat {
+        JAB,DOUBLE_JAB,CROSS,HOOK_LEAD,HOOK_REAR,UPPERCUT,OVERHAND,
+        LOW_KICK,BODY_KICK,HEAD_KICK,TEEP,SIDE_KICK,SPIN_KICK,SPIN_BACKFIST,
+        KNEE,ELBOW,COLLAR_TIE,BODY_LOCK,UNDERHOOK_PIN,
+        DOUBLE_LEG,SINGLE_LEG,ANKLE_PICK,CAGE_SHOT,
+        FRONT_HEADLOCK,GUILLOTINE,BACK_CONTROL,RNC,ARMBAR,TRIANGLE,KIMURA,
+        MOUNT_BOTTOM,SIDE_CONTROL_BOTTOM,HIP_ESCAPE,WALL_WALK,SCRAMBLE_UP,NONE
+    }
+    private static final class Event {final Threat threat;final String text;final Range range;final int window;Event(Threat t,String x,Range r,int w){threat=t;text=x;range=r;window=w;}}
+    private static final class Defense {
+        final Threat threat;final String name;final Range endRange;final Side load;final int balance,guard;final String mechanic,source;
+        Defense(Threat t,String n,Range r,Side l,int b,int g,String m,String s){threat=t;name=n;endRange=r;load=l;balance=b;guard=g;mechanic=m;source=s;}
+    }
+    private static final class Action {
+        final String name,domain,source,role,target,family;final Range start,end;final Side side,loads;final int commitment,mobilityCost,minWindow;
+        Action(String n,String dm,String src,Range s,Range e,Side sd,Side ld,int c,int debt,int win,String role,String target,String fam){
+            name=n;domain=dm;source=src;start=s;end=e;side=sd;loads=ld;commitment=c;mobilityCost=debt;minWindow=win;this.role=role;this.target=target;family=fam;
+        }
+    }
+    private static final class SimState {
+        Range range=Range.BOXING;Side loaded=Side.CENTER;int balance=88,guard=88,mobilityDebt=0,initiative=0,rivalPressure=50,fatigue=0,positionStreak=0;
+        String cage="CENTER",opponentGuard="MIXED",opponentBalance="STABLE",lastUserAction="",lastDefense="",lastPurpose="PROBE",lastFamily="";
+        SimState copy(){SimState s=new SimState();s.range=range;s.loaded=loaded;s.balance=balance;s.guard=guard;s.mobilityDebt=mobilityDebt;s.initiative=initiative;s.rivalPressure=rivalPressure;s.fatigue=fatigue;s.positionStreak=positionStreak;s.cage=cage;s.opponentGuard=opponentGuard;s.opponentBalance=opponentBalance;s.lastUserAction=lastUserAction;s.lastDefense=lastDefense;s.lastPurpose=lastPurpose;s.lastFamily=lastFamily;return s;}
+    }
+
+    private final Random rnd=new Random();
+    private final List<String> libraryNamed,libraryCodes;
+    private final EnumMap<Threat,List<Defense>> defenses=new EnumMap<>(Threat.class);
+    private final List<Action> actions=new ArrayList<>();
+    private final LinkedHashMap<String,String> sourceRules=new LinkedHashMap<>();
+    private final Map<String,Integer> opponentBeliefs=new HashMap<>(),userHabits=new HashMap<>(),contextHabits=new HashMap<>(),actionCredit=new HashMap<>(),reactionBeliefs=new HashMap<>(),patternMemory=new HashMap<>(),shardAttempts=new HashMap<>(),shardQuality=new HashMap<>(),shardContextHits=new HashMap<>();
+    private final Deque<String> recentPlans=new ArrayDeque<>(),recentActions=new ArrayDeque<>(),recentFamilies=new ArrayDeque<>(),recentSources=new ArrayDeque<>();
+    private Config cfg=new Config();private SimState st=new SimState();private Threat lastThreat=Threat.NONE;private Defense lastDefense=null;private List<Action> lastPlan=Collections.emptyList();private String lastEvent="",queuedReaction="UNKNOWN",lastPattern="UNSET",lastShard="UNTRACKED";private int exchange=0;
+
+    public TacticalEngine(List<String> named,List<String> codes){libraryNamed=named==null?Collections.emptyList():new ArrayList<>(named);libraryCodes=codes==null?Collections.emptyList():new ArrayList<>(codes);seedSourceRules();seedDefenses();seedActions();}
+
+    private void seedSourceRules(){
+        sourceRules.put("User Combat/Biomechanics Docs","frames before hips; base before power; defense stores offense; loaded position and recovery determine what is legal next");
+        sourceRules.put("World Class Boxing / Tom Yankello","punch-specific defense/counter trees, inside arm control, same/opposite stance logic, corner escape and footwork");
+        sourceRules.put("Sean Fagan","teep, low-kick adaptation, kick catches, clinch frames, sweeps and return-fire continuity");
+        sourceRules.put("FIGHTTIPS","high-percentage MMA transitions, defensive responsibility, clean entries and strike-to-grapple continuity");
+        sourceRules.put("Jesse Enkamp","position and angle before volume; karate distance changes, side steps, blitz entries and stance integrity");
+        sourceRules.put("MMA Shredded / Jeff Chan","bait-counter, sprawl-and-brawl, boxing-to-shot, same-side striking, switch-hitting and distance closing");
+        sourceRules.put("Precision Striking / Precision Boxing","create openings, make miss, re-enter, reposition; compact counters and repeatable boxing geometry");
+        sourceRules.put("The Punch Doctor","Load → Explode → Accelerate → Follow Through; ground-up kinetic-chain transfer and compact recoil");
+        sourceRules.put("Trevor Wittman / Justin Gaethje","provoke predictable defense, punish the reaction, irregular foot rhythm, structure on exit");
+        sourceRules.put("Benny Urquidez","clock movement, step-drag/crossover/switch footwork, rhythm defense, redirects, kicks, clinch, sweeps and inside fighting");
+        sourceRules.put("Michael Jai White","relaxed low-telegraph initiation, whole-body trigger and late acceleration rather than visible preload");
+        sourceRules.put("52 Blocks","shoulder/forearm/elbow shields, catches, rolls, traps, frames and immediate defensive offense");
+        sourceRules.put("Modern Martial Artist / Power of the Pros","center-of-gravity transfer, linear/angular blending, structure, recoil and fighter-specific mechanics");
+        sourceRules.put("Combat Athlete Physio","joint stacking, movement quality, load tolerance and removing positional power leaks");
+        sourceRules.put("Theo Tanchak","posture, gait and ordinary movement patterns upstream of striking quality");
+        sourceRules.put("Glove Up Training","clean fundamentals, disciplined footwork, repeatable technique and hard-but-clean practice");
+        sourceRules.put("Phil Daru Strong","fatigue-aware quality, high/low organization, contrast work and rate-of-force development");
+        sourceRules.put("Baki / Kengan Mechanics","fiction filtered through real mechanics: redirection, angle theft, relaxed acceleration, stance disruption and unusual timing");
+        sourceRules.put("Miyamoto Musashi","take initiative, break rhythm, force one response and strike the opening caused by it");
+        sourceRules.put("Sun Tzu","shape expectation, conceal objective, attack weak lanes and change the problem before adaptation");
+        sourceRules.put("Skrilla Boxing","UNVERIFIED: exact channel link still required; pack intentionally disabled rather than invented");
+    }
+
+    public void setConfig(Config c){if(c!=null){cfg=c;resetRoundState();}}
+    public Config getConfig(){return cfg;} public String getLastThreat(){return lastThreat.name();}public String getGroundState(){return st.range.name();}public int getExchange(){return exchange;}public int getRivalPressure(){return st.rivalPressure;}public String getRingZone(){return st.cage;}public String getConditionPattern(){return lastPattern;}public String getShardStatus(){return lastShard;}
+    public boolean lastResponseSolvedThreat(){return lastThreat==Thre
