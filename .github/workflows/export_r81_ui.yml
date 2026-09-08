@@ -1,0 +1,22 @@
+name: Export R8.1 UI Source
+on:
+  push:
+    branches: [ hanma-combo-r3 ]
+    paths: [ '.github/workflows/export_r81_ui.yml' ]
+  workflow_dispatch:
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct R8.1 MainActivity
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat hanma-combo-r3/source_payload/MainActivity.omega900.part* | base64 -d | gzip -d > MainActivity.java
+          echo '5908b377a71e77a6379a0a75593361874e6cf8147c9436a22d751e4d6645a9c0  MainActivity.java' | sha256sum -c -
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r81-exact-ui-source
+          path: MainActivity.java
+          retention-days: 7
