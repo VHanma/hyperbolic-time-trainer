@@ -1,0 +1,139 @@
+name: Build Hanma Combo Caller R8.2 Rapid
+on:
+  push:
+    branches: [ hanma-combo-r3 ]
+    paths:
+      - '.github/workflows/build_hanma_combo_r82_rapid.yml'
+      - 'hanma-combo-r3/source_payload/MainActivity.rapid820.part*'
+      - 'hanma-combo-r3/source_payload/TacticalEngine.omega900.part*'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct checksum-locked R8.2 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_codes.txt)" -eq 400
+          test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          mkdir -p "$SRC"
+          cat hanma-combo-r3/source_payload/TacticalEngine.omega900.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
+          cat hanma-combo-r3/source_payload/MainActivity.rapid820.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
+          echo 'e8df22a65e5b5e5463e9a982f098b3be7f3b45cd4fbe190c4b04ed9e81d0359a  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          echo '09813702e4578130897a345b91457c5135c82db3267e14d477bc623005e8d0cf  '$SRC'/MainActivity.java' | sha256sum -c -
+          grep -q 'UtteranceProgressListener' "$SRC/MainActivity.java"
+          grep -q 'RAPID CALL • HANDS-FREE CADENCE' "$SRC/MainActivity.java"
+          grep -q 'Blitz • 0.35 sec gap' "$SRC/MainActivity.java"
+          grep -q 'Technical • 2.00 sec gap' "$SRC/MainActivity.java"
+          grep -q 'rapidNext' "$SRC/MainActivity.java"
+          sha256sum "$SRC/TacticalEngine.java" "$SRC/MainActivity.java" | tee /tmp/R82-SOURCE-SHA256.txt
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Combat-engine regression harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          rm -rf /tmp/r82 && mkdir -p /tmp/r82
+          javac -d /tmp/r82 "$SRC/TacticalEngine.java"
+          cat > /tmp/R82Harness.java <<'JAVA'
+          import com.vhanma.hanmacombocallerr3.TacticalEngine;import java.util.*;
+          public class R82Harness{
+            static final String[] FB={"RESET","CLEAN","LATE","BLOCKED","MISSED","COUNTERED"}; static long n=0;
+            static boolean any(String s,String...q){s=s.toLowerCase(Locale.US);for(String x:q)if(s.contains(x))return true;return false;}
+            static void ck(TacticalEngine e,TacticalEngine.Result r){if(r==null||r.cue==null||r.cue.trim().isEmpty())throw new RuntimeException("empty");if(!e.lastResponseSolvedThreat())throw new RuntimeException("unsolved "+r.opponentEvent+" => "+r.cue);if(e.lastPlanHasLoop())throw new RuntimeException("loop "+r.cue);if(e.lastPlanMorphCount()>1)throw new RuntimeException("morph overflow");String sp=TacticalEngine.toSpeech(r.cue);if(any(sp,"→","←","/R/","/L/"))throw new RuntimeException("tts leak");n++;}
+            public static void main(String[]a){TacticalEngine e=new TacticalEngine(Arrays.asList("Jab, Cross","Hook, Cross"),Arrays.asList("1-2","3-2"));String v=e.validateKnowledge();if(!v.isEmpty())throw new RuntimeException(v);for(String d:TacticalEngine.DISCIPLINES){TacticalEngine.Config c=new TacticalEngine.Config();c.discipline=d;c.mode=d;c.difficulty=10;for(String o:TacticalEngine.OPPONENTS){c.opponent=o;for(String r:new String[]{"Long","Boxing","Pocket","Clinch","Ground"}){c.startRange=r;e.setConfig(c);for(int i=0;i<3;i++)ck(e,e.next(FB[i%FB.length]));}}}TacticalEngine.Config b=new TacticalEngine.Config();b.discipline="Boxing Only";b.mode="Boxing Only";b.profile="World Class Boxing";b.doctrine="World Class Boxing / Tom Yankello";e.setConfig(b);Set<String>u=new HashSet<>();for(int i=0;i<500;i++){TacticalEngine.Result r=e.next(FB[i%FB.length]);ck(e,r);u.add(r.cue);String x=r.cue.toLowerCase(Locale.US);if(any(x,"round kick","teep","knee strike","elbow strike","double leg","single leg","armbar","triangle choke"))throw new RuntimeException("boxing leak "+r.cue);}if(u.size()<120)throw new RuntimeException("boxing diversity "+u.size());String st=e.exportCombatState();if(!st.startsWith("R8O9|"))throw new RuntimeException("state");System.out.println("R8.2 RAPID ENGINE PASS calls="+n+" boxingUnique="+u.size()+" stateBytes="+st.length());}
+          }
+          JAVA
+          javac -cp /tmp/r82 -d /tmp/r82 /tmp/R82Harness.java
+          timeout 90s java -cp /tmp/r82 R82Harness | tee /tmp/R82-HARNESS-REPORT.txt
+      - name: Set R8.2 package, label and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          sed -i 's/package com\.vhanma\.hanmacombocallerr3;/package com.vhanma.hanmacombocalleromega82;/' "$SRC/TacticalEngine.java" "$SRC/MainActivity.java"
+          sed -i "s/namespace 'com.vhanma.hanmacombocallerr3'/namespace 'com.vhanma.hanmacombocalleromega82'/" hanma-combo-r3/app/build.gradle
+          sed -i "s/applicationId 'com.vhanma.hanmacombocallerr3'/applicationId 'com.vhanma.hanmacombocalleromega82'/" hanma-combo-r3/app/build.gradle
+          sed -i "s/versionCode [0-9][0-9]*/versionCode 820/" hanma-combo-r3/app/build.gradle
+          sed -i "s/versionName '[^']*'/versionName '8.2.0-Omega-Rapid'/" hanma-combo-r3/app/build.gradle
+          sed -i 's/android:label="[^"]*"/android:label="Hanma Combo Caller R8.2 Ω"/' hanma-combo-r3/app/src/main/AndroidManifest.xml
+      - name: Set up Gradle 8.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          cd hanma-combo-r3
+          /tmp/gradle-dist/gradle-8.2/bin/gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+      - name: Build Android release
+        shell: bash
+        run: |
+          set -o pipefail
+          cd hanma-combo-r3
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/r82-build.log
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-r82-rapid-failure
+          path: |
+            /tmp/r82-build.log
+            /tmp/R82-HARNESS-REPORT.txt
+            /tmp/R82-SOURCE-SHA256.txt
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Verify and package APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK=dist/Hanma-Combo-Caller-R8.2-Omega-Rapid-v8.2.0.apk
+          cp hanma-combo-r3/app/build/outputs/apk/release/app-release.apk "$APK"
+          BT="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BT/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BT/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
+          grep -q "package: name='com.vhanma.hanmacombocalleromega82'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionCode='820'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionName='8.2.0-Omega-Rapid'" dist/APK-BADGING-REPORT.txt
+          grep -q "application-label:'Hanma Combo Caller R8.2 Ω'" dist/APK-BADGING-REPORT.txt
+          if grep -q 'uses-permission:' dist/APK-BADGING-REPORT.txt; then echo 'Unexpected permission'; exit 1; fi
+          unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
+          sha256sum "$APK" > dist/Hanma-Combo-Caller-R8.2-Omega-Rapid-v8.2.0-SHA256.txt
+          cp /tmp/R82-HARNESS-REPORT.txt /tmp/R82-SOURCE-SHA256.txt dist/
+          cat > dist/BUILD-REPORT.txt <<'REPORT'
+          HANMA COMBO CALLER R8.2 OMEGA RAPID v8.2.0
+          Package: com.vhanma.hanmacombocalleromega82
+          Runtime permissions: none
+          Rapid Call: speech-aware auto-advance. TTS completion triggers the next call after a selectable 0.35 / 0.70 / 1.20 / 2.00 second gap.
+          Rapid Call safeguards: no overlapping speech, pause cancels pending auto-call, Branching Spar waits for solution reveal and speech completion, manual outcome feedback cancels the pending auto-call and feeds learning before continuing, round expiry stops the chain.
+          Existing R8 Omega brain preserved: causal threat defense, discipline legality, doctrine/profile scoring, opponent beliefs, conditioning betrayal, anti-repeat memory, ring state, skill shards, Ghost Replay and 898-slot Pure Library.
+          Install lineage: separate R8.2 package so it can install beside R8.1 despite R8.1's ephemeral debug-signing certificate.
+          REPORT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hanma-combo-caller-r82-omega-rapid
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=hanma-combo-r82-omega-rapid-v8.2.0
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "Hanma Combo Caller R8.2 Omega Rapid v8.2.0" --notes "Adds speech-aware Rapid Call with Blitz/Fast/Flow/Technical cadence options and an in-round Rapid toggle. Auto-advance waits for TTS completion, never overlaps speech, respects Branching Spar reveal timing, pauses cleanly, accepts manual feedback, and stops at round end. The R8 Omega combat engine remains checksum-locked."
+          fi
