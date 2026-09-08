@@ -4,8 +4,9 @@ on:
     branches: [ hanma-combo-r3 ]
     paths:
       - '.github/workflows/build_hanma_combo_r82_rapid.yml'
-      - 'hanma-combo-r3/source_payload/MainActivity.rapid820.part*'
+      - 'hanma-combo-r3/source_payload/rapid820_patch.py'
       - 'hanma-combo-r3/source_payload/TacticalEngine.omega900.part*'
+      - 'hanma-combo-r3/source_payload/MainActivity.omega900.part*'
   workflow_dispatch:
 permissions:
   contents: write
@@ -15,7 +16,7 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v4
-      - name: Reconstruct checksum-locked R8.2 source
+      - name: Reconstruct and patch checksum-locked R8.2 source
         shell: bash
         run: |
           set -euo pipefail
@@ -24,14 +25,17 @@ jobs:
           SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
           mkdir -p "$SRC"
           cat hanma-combo-r3/source_payload/TacticalEngine.omega900.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
-          cat hanma-combo-r3/source_payload/MainActivity.rapid820.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
+          cat hanma-combo-r3/source_payload/MainActivity.omega900.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
           echo 'e8df22a65e5b5e5463e9a982f098b3be7f3b45cd4fbe190c4b04ed9e81d0359a  '$SRC'/TacticalEngine.java' | sha256sum -c -
-          echo '09813702e4578130897a345b91457c5135c82db3267e14d477bc623005e8d0cf  '$SRC'/MainActivity.java' | sha256sum -c -
+          echo '5908b377a71e77a6379a0a75593361874e6cf8147c9436a22d751e4d6645a9c0  '$SRC'/MainActivity.java' | sha256sum -c -
+          python3 hanma-combo-r3/source_payload/rapid820_patch.py "$SRC/MainActivity.java"
+          echo 'f6539340c5bffdeb400246d15a4f798317e5b9282b5f64e783c4519efb9429ab  '$SRC'/MainActivity.java' | sha256sum -c -
           grep -q 'UtteranceProgressListener' "$SRC/MainActivity.java"
           grep -q 'RAPID CALL • HANDS-FREE CADENCE' "$SRC/MainActivity.java"
           grep -q 'Blitz • 0.35 sec gap' "$SRC/MainActivity.java"
           grep -q 'Technical • 2.00 sec gap' "$SRC/MainActivity.java"
           grep -q 'rapidNext' "$SRC/MainActivity.java"
+          grep -q 'RAPID ON' "$SRC/MainActivity.java"
           sha256sum "$SRC/TacticalEngine.java" "$SRC/MainActivity.java" | tee /tmp/R82-SOURCE-SHA256.txt
       - uses: actions/setup-java@v4
         with:
