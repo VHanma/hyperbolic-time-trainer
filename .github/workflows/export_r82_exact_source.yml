@@ -1,0 +1,29 @@
+name: Export R8.2 Exact Source
+on:
+  workflow_dispatch:
+  push:
+    branches: [ hanma-combo-r3 ]
+    paths: [ '.github/workflows/export_r82_exact_source.yml' ]
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct exact R8.2 source
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=/tmp/r82/com/vhanma/hanmacombocallerr3
+          mkdir -p "$SRC"
+          cat hanma-combo-r3/source_payload/TacticalEngine.omega900.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
+          cat hanma-combo-r3/source_payload/MainActivity.omega900.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
+          echo 'e8df22a65e5b5e5463e9a982f098b3be7f3b45cd4fbe190c4b04ed9e81d0359a  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          echo '5908b377a71e77a6379a0a75593361874e6cf8147c9436a22d751e4d6645a9c0  '$SRC'/MainActivity.java' | sha256sum -c -
+          python3 hanma-combo-r3/source_payload/rapid820_patch.py "$SRC/MainActivity.java"
+          echo 'f6539340c5bffdeb400246d15a4f798317e5b9282b5f64e783c4519efb9429ab  '$SRC'/MainActivity.java' | sha256sum -c -
+          sha256sum "$SRC"/*.java > /tmp/r82/SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: r82-exact-source
+          path: /tmp/r82/**
+          retention-days: 7
