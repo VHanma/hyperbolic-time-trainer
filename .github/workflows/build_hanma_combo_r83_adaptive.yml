@@ -1,0 +1,174 @@
+name: Build Hanma Combo Caller R8.3 Adaptive
+on:
+  push:
+    branches: [ hanma-combo-r3 ]
+    paths:
+      - '.github/workflows/build_hanma_combo_r83_adaptive.yml'
+      - 'hanma-combo-r3/source_payload/TacticalEngine.r83.patch.gz.b64'
+      - 'hanma-combo-r3/source_payload/MainActivity.r83.patch.gz.b64'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct exact R8.2 and apply R8.3 brain
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_codes.txt)" -eq 400
+          test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          mkdir -p "$SRC"
+          cat hanma-combo-r3/source_payload/TacticalEngine.omega900.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
+          cat hanma-combo-r3/source_payload/MainActivity.omega900.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
+          echo 'e8df22a65e5b5e5463e9a982f098b3be7f3b45cd4fbe190c4b04ed9e81d0359a  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          echo '5908b377a71e77a6379a0a75593361874e6cf8147c9436a22d751e4d6645a9c0  '$SRC'/MainActivity.java' | sha256sum -c -
+          python3 hanma-combo-r3/source_payload/rapid820_patch.py "$SRC/MainActivity.java"
+          echo 'f6539340c5bffdeb400246d15a4f798317e5b9282b5f64e783c4519efb9429ab  '$SRC'/MainActivity.java' | sha256sum -c -
+          base64 -d hanma-combo-r3/source_payload/TacticalEngine.r83.patch.gz.b64 | gzip -d > /tmp/r83-engine.patch
+          base64 -d hanma-combo-r3/source_payload/MainActivity.r83.patch.gz.b64 | gzip -d > /tmp/r83-ui.patch
+          patch --fuzz=0 --batch "$SRC/TacticalEngine.java" < /tmp/r83-engine.patch
+          patch --fuzz=0 --batch "$SRC/MainActivity.java" < /tmp/r83-ui.patch
+          echo 'd17eaaa65e2a0ec57b3a259fdc32ae93f285bd5c8d5cc2e860c8a90c1d4d2b7a  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          echo '2f8e22ae1f7d12278dedd91188aa87e212fd813925f7e24aee9a65c8af0cfab4  '$SRC'/MainActivity.java' | sha256sum -c -
+          grep -q 'Adaptive Explorer' "$SRC/TacticalEngine.java"
+          grep -q 'brainTrials' "$SRC/TacticalEngine.java"
+          grep -q 'recentThreats' "$SRC/TacticalEngine.java"
+          grep -q 'recentDefenses' "$SRC/TacticalEngine.java"
+          grep -q 'contextual bandit' "$SRC/TacticalEngine.java"
+          grep -q 'REPEAT EACH CALL' "$SRC/MainActivity.java"
+          grep -q 'new String\[]{"1×","2×","3×","4×","5×"}' "$SRC/MainActivity.java"
+          grep -q 'callRepeatIndex<callRepeatTarget' "$SRC/MainActivity.java"
+          grep -q 'repeatCall' "$SRC/MainActivity.java"
+          sha256sum "$SRC/TacticalEngine.java" "$SRC/MainActivity.java" | tee /tmp/R83-SOURCE-SHA256.txt
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: R8.3 adaptive combat harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          rm -rf /tmp/r83 && mkdir -p /tmp/r83
+          javac -d /tmp/r83 "$SRC/TacticalEngine.java"
+          cat > /tmp/R83Harness.java <<'JAVA'
+          import com.vhanma.hanmacombocallerr3.TacticalEngine;import java.util.*;import java.lang.reflect.*;
+          public class R83Harness{
+            static long n=0;static final String[] FB={"RESET","CLEAN","LATE","BLOCKED","MISSED","COUNTERED","CLEAN"};
+            static void die(String x){throw new RuntimeException(x);} static boolean any(String s,String...q){s=s.toLowerCase(Locale.US);for(String x:q)if(s.contains(x.toLowerCase(Locale.US)))return true;return false;}
+            static void seed(TacticalEngine e,long v)throws Exception{Field f=TacticalEngine.class.getDeclaredField("rng");f.setAccessible(true);((Random)f.get(e)).setSeed(v);} static TacticalEngine fresh(){return new TacticalEngine(Arrays.asList("Jab, Cross","Hook, Cross"),Arrays.asList("1-2","3-2"));}
+            static TacticalEngine.Config cfg(String d,String brain){TacticalEngine.Config c=new TacticalEngine.Config();c.mode=d;c.discipline=d;c.opponent="Adaptive Rival";c.profile="Hanma Adaptive";c.doctrine="Omega Synthesis";c.startRange=(d.equals("Wrestling")||d.equals("No-Gi Grappling"))?"Clinch":"Boxing";c.brainMode=brain;c.difficulty=10;return c;}
+            static void ck(TacticalEngine e,TacticalEngine.Result r,String d){if(r==null||r.cue==null||r.cue.isEmpty())die("empty");if(!e.lastResponseSolvedThreat())die("unsolved "+r.opponentEvent+" => "+r.cue);if(e.lastPlanHasLoop())die("loop "+r.cue);if(e.lastPlanMorphCount()>1)die("morph");String s=TacticalEngine.toSpeech(r.cue);if(any(s,"→","←","/R/","/L/"))die("tts "+s);String x=r.cue.toLowerCase(Locale.US);if(d.equals("Boxing Only")&&any(x,"round kick","low kick","calf kick","teep","side kick","knee strike","elbow strike","double leg","single leg","armbar","triangle choke","rear naked choke"))die("boxing leak "+r.cue);if(d.equals("Wrestling")&&any(x,"jab","rear straight","lead hook","uppercut","round kick","teep","knee strike","elbow strike","armbar","triangle choke"))die("wrestling leak "+r.cue);if(d.equals("No-Gi Grappling")&&any(x,"jab","rear straight","lead hook","uppercut","round kick","teep","knee strike","elbow strike"))die("nogi leak "+r.cue);n++;}
+            static List<String> run(TacticalEngine e,TacticalEngine.Config c,int count,long sd)throws Exception{seed(e,sd);e.setConfig(c);List<String>o=new ArrayList<>();for(int i=0;i<count;i++){TacticalEngine.Result r=e.next(FB[i%FB.length]);ck(e,r,c.discipline);o.add(r.cue);}return o;}
+            public static void main(String[]z)throws Exception{
+              TacticalEngine s=fresh();String v=s.validateKnowledge();if(!v.isEmpty())die(v);String sp=TacticalEngine.toSpeech("/R/ jab → cross /L/ hook Ω");if(!sp.contains("slip right")||!sp.contains("slip left")||!sp.contains("Omega"))die("speech map");
+              for(String d:TacticalEngine.DISCIPLINES){TacticalEngine e=fresh();TacticalEngine.Config c=cfg(d,"Adaptive Balanced");seed(e,1000+d.hashCode());e.setConfig(c);Set<String>u=new HashSet<>();String pt="",pd="";int st=0,sd=0;for(int i=0;i<60;i++){TacticalEngine.Result r=e.next(FB[i%FB.length]);ck(e,r,d);u.add(r.cue);String t=e.getLastThreat(),de=r.cue.contains(" → ")?r.cue.substring(0,r.cue.indexOf(" → ")):r.cue;if(t.equals(pt))st++;if(de.equals(pd))sd++;pt=t;pd=de;}if(u.size()<42)die("low diversity "+d+"="+u.size());if(st>20||sd>20)die("repeat collapse "+d+" threat="+st+" defense="+sd);}
+              TacticalEngine b=fresh();TacticalEngine.Config bc=cfg("Boxing Only","Adaptive Explorer");bc.profile="World Class Boxing";bc.doctrine="World Class Boxing / Tom Yankello";List<String>bl=run(b,bc,260,77);if(new HashSet<>(bl).size()<190)die("boxing diversity");
+              TacticalEngine l=fresh();TacticalEngine.Config lc=cfg("MMA","Adaptive Balanced");lc.opponent="Pressure Fighter";lc.profile="Ilia Topuria";lc.doctrine="MMA Shredded / Jeff Chan";seed(l,404);l.setConfig(lc);for(int i=0;i<130;i++){String f=i%5==0?"COUNTERED":i%3==0?"BLOCKED":"CLEAN";ck(l,l.next(f),"MMA");}int tr=l.getBrainTotalTrials(),cx=l.getBrainContextCount();if(tr<100||cx<30)die("brain not learning "+tr+"/"+cx);String state=l.exportCombatState();TacticalEngine r=fresh();r.importCombatState(state);if(r.getBrainTotalTrials()!=tr||r.getBrainContextCount()!=cx)die("brain persistence");if(state.length()>180000)die("state bloat "+state.length());
+              TacticalEngine ex=fresh(),xp=fresh();ex.importCombatState(state);xp.importCombatState(state);TacticalEngine.Config ec=cfg("MMA","Adaptive Explorer"),xc=cfg("MMA","Adaptive Exploit");ec.opponent=xc.opponent="Pressure Fighter";ec.profile=xc.profile="Ilia Topuria";ec.doctrine=xc.doctrine="MMA Shredded / Jeff Chan";List<String>es=run(ex,ec,45,991),xs=run(xp,xc,45,991);int same=0;for(int i=0;i<45;i++)if(es.get(i).equals(xs.get(i)))same++;if(same>40)die("brain modes inactive "+same);
+              System.out.println("R8.3 ADAPTIVE CI PASS calls="+n+" boxingUnique="+new HashSet<>(bl).size()+" brainTrials="+tr+" contexts="+cx+" stateBytes="+state.length()+" explorerExploitSame="+same);
+            }
+          }
+          JAVA
+          javac -cp /tmp/r83 -d /tmp/r83 /tmp/R83Harness.java
+          timeout 90s java -cp /tmp/r83 R83Harness | tee /tmp/R83-HARNESS-REPORT.txt
+
+      - name: Set R8.3 package, label and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          sed -i 's/package com\.vhanma\.hanmacombocallerr3;/package com.vhanma.hanmacombocalleromega83;/' "$SRC/TacticalEngine.java" "$SRC/MainActivity.java"
+          sed -i "s/namespace 'com.vhanma.hanmacombocallerr3'/namespace 'com.vhanma.hanmacombocalleromega83'/" hanma-combo-r3/app/build.gradle
+          sed -i "s/applicationId 'com.vhanma.hanmacombocallerr3'/applicationId 'com.vhanma.hanmacombocalleromega83'/" hanma-combo-r3/app/build.gradle
+          sed -i "s/versionCode [0-9][0-9]*/versionCode 830/" hanma-combo-r3/app/build.gradle
+          sed -i "s/versionName '[^']*'/versionName '8.3.0-Omega-Adaptive'/" hanma-combo-r3/app/build.gradle
+          sed -i 's/android:label="[^"]*"/android:label="Hanma Combo Caller R8.3 Ω"/' hanma-combo-r3/app/src/main/AndroidManifest.xml
+
+      - name: Set up Gradle 8.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          cd hanma-combo-r3
+          /tmp/gradle-dist/gradle-8.2/bin/gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+
+      - name: Build Android release
+        shell: bash
+        run: |
+          set -o pipefail
+          cd hanma-combo-r3
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/r83-build.log
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-r83-adaptive-failure
+          path: |
+            /tmp/r83-build.log
+            /tmp/R83-HARNESS-REPORT.txt
+            /tmp/R83-SOURCE-SHA256.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Verify and package R8.3
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK=dist/Hanma-Combo-Caller-R8.3-Omega-Adaptive-v8.3.0.apk
+          cp hanma-combo-r3/app/build/outputs/apk/release/app-release.apk "$APK"
+          BT="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BT/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BT/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
+          grep -q "package: name='com.vhanma.hanmacombocalleromega83'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionCode='830'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionName='8.3.0-Omega-Adaptive'" dist/APK-BADGING-REPORT.txt
+          grep -q "application-label:'Hanma Combo Caller R8.3 Ω'" dist/APK-BADGING-REPORT.txt
+          if grep -q 'uses-permission:' dist/APK-BADGING-REPORT.txt; then echo 'Unexpected runtime permission'; exit 1; fi
+          unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
+          sha256sum "$APK" > dist/Hanma-Combo-Caller-R8.3-Omega-Adaptive-v8.3.0-SHA256.txt
+          cp /tmp/R83-HARNESS-REPORT.txt /tmp/R83-SOURCE-SHA256.txt dist/
+          cat > dist/BUILD-REPORT.txt <<'REPORT'
+          HANMA COMBO CALLER R8.3 OMEGA ADAPTIVE
+          Package: com.vhanma.hanmacombocalleromega83
+          Version: 8.3.0-Omega-Adaptive / 830
+          Runtime permissions: none
+          Original library: 400 coded + 498 named = 898 preserved slots
+          Repeat Each Call: selectable 1x / 2x / 3x / 4x / 5x. Same generated call is repeated before any new plan is generated. Works with Rapid or standalone. Branching Spar repeats only the revealed solution.
+          Omega Adaptive Brain: offline contextual reinforcement-style learner. It learns threat + range + ring zone + opponent + reaction + action-family outcome values from CLEAN/LATE/BLOCKED/MISSED/COUNTERED feedback, plus learned action-to-action transitions.
+          Brain modes: Adaptive Balanced / Explorer / Exploit.
+          Intelligence fixes: dedicated opponent-threat recency memory; dedicated defense recency memory; plan-pattern novelty scoring; tactical multi-call phases; corrected Explorer/Exploit sampling temperature; opponent-reaction continuity; persisted compact brain state.
+          Existing R8 causal beam planner, counterfactual replies, profile/doctrine weighting, ring state, skill shards, Ghost Replay and Rapid Call are preserved.
+          REPORT
+          (cd hanma-combo-r3 && zip -qr ../dist/Hanma-Combo-Caller-R8.3-Omega-Adaptive-v8.3.0-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hanma-combo-caller-r83-omega-adaptive
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=hanma-combo-r83-omega-adaptive-v8.3.0
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "Hanma Combo Caller R8.3 Omega Adaptive v8.3.0" --notes "Adds 1x-5x Repeat Each Call and an offline adaptive contextual learning brain with Balanced/Explorer/Exploit modes. Fixes opponent-threat and defense repetition memory, adds tactical multi-call phases and plan-pattern novelty, while preserving Rapid Call, Branching Spar, Ghost Replay, causal beam search, doctrine/profile weighting and the original 898-slot library."
+          fi
