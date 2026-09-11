@@ -1,0 +1,182 @@
+name: Build Hanma Combo Caller R8.3.2 Source Locked
+
+on:
+  push:
+    branches: [ hanma-combo-r3 ]
+    paths:
+      - '.github/workflows/build_hanma_combo_r832_source_locked.yml'
+      - 'hanma-combo-r3/source_payload/TacticalEngine.r832.patch.gz.b64'
+      - 'hanma-combo-r3/source_payload/MainActivity.r832.patch.gz.b64'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct exact R8.3.1 and apply Source Locked upgrade
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_codes.txt)" -eq 400
+          test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          mkdir -p "$SRC"
+          cat hanma-combo-r3/source_payload/TacticalEngine.omega900.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
+          cat hanma-combo-r3/source_payload/MainActivity.omega900.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
+          echo 'e8df22a65e5b5e5463e9a982f098b3be7f3b45cd4fbe190c4b04ed9e81d0359a  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          echo '5908b377a71e77a6379a0a75593361874e6cf8147c9436a22d751e4d6645a9c0  '$SRC'/MainActivity.java' | sha256sum -c -
+          python3 hanma-combo-r3/source_payload/rapid820_patch.py "$SRC/MainActivity.java"
+          base64 -d hanma-combo-r3/source_payload/TacticalEngine.r83.patch.gz.b64 | gzip -d > /tmp/r83e.patch
+          base64 -d hanma-combo-r3/source_payload/MainActivity.r83.patch.gz.b64 | gzip -d > /tmp/r83m.patch
+          patch --fuzz=0 --batch "$SRC/TacticalEngine.java" < /tmp/r83e.patch
+          patch --fuzz=0 --batch "$SRC/MainActivity.java" < /tmp/r83m.patch
+          echo 'd17eaaa65e2a0ec57b3a259fdc32ae93f285bd5c8d5cc2e860c8a90c1d4d2b7a  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          echo '2f8e22ae1f7d12278dedd91188aa87e212fd813925f7e24aee9a65c8af0cfab4  '$SRC'/MainActivity.java' | sha256sum -c -
+          sed -i 's/package com\.vhanma\.hanmacombocallerr3;/package com.vhanma.hanmacombocalleromega83;/' "$SRC/TacticalEngine.java" "$SRC/MainActivity.java"
+          base64 -d hanma-combo-r3/source_payload/TacticalEngine.r831direction.patch.gz.b64 | gzip -d > /tmp/r831.patch
+          patch --fuzz=0 --batch "$SRC/TacticalEngine.java" < /tmp/r831.patch
+          sed -i 's/package com\.vhanma\.hanmacombocalleromega83;/package com.vhanma.hanmacombocalleromega831;/' "$SRC/TacticalEngine.java" "$SRC/MainActivity.java"
+          sed -i 's/R8\.3 Ω ADAPTIVE FIGHT INTELLIGENCE/R8.3.1 Ω DIRECTIONAL FIGHT IQ/' "$SRC/MainActivity.java"
+          sed -i 's/R8\.3 also learns/R8.3.1 adds stance-aware left\/right limb and footwork geometry while it also learns/' "$SRC/MainActivity.java"
+          echo 'd468c181c939bdc6d294165c4927ca0a0a29016a545721e37002ec404529cb22  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          echo '457cfaf492710448ff75611d5a104beea55d621d6f6f766f7685a066d3a55f07  '$SRC'/MainActivity.java' | sha256sum -c -
+          base64 -d hanma-combo-r3/source_payload/TacticalEngine.r832.patch.gz.b64 | gzip -d > /tmp/r832e.patch
+          base64 -d hanma-combo-r3/source_payload/MainActivity.r832.patch.gz.b64 | gzip -d > /tmp/r832m.patch
+          patch --fuzz=0 --batch "$SRC/TacticalEngine.java" < /tmp/r832e.patch
+          patch --fuzz=0 --batch "$SRC/MainActivity.java" < /tmp/r832m.patch
+          echo '2ef538819bb0a06b4ccc409ff9404a6da523be21e9206a1aacaacaca6075722b  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          echo 'ff7d83d5f42849aa48fc6890c96b45643f54cce881234468b13cbd484db17b5f  '$SRC'/MainActivity.java' | sha256sum -c -
+          grep -q '"Source Locked"' "$SRC/TacticalEngine.java"
+          grep -q 'sourceCalls.size()<100' "$SRC/TacticalEngine.java"
+          grep -q 'MINIMAL LIMB NORMALIZATION ONLY' "$SRC/TacticalEngine.java"
+          grep -q 'SOURCE LOCKED RULESET / SPORT' "$SRC/MainActivity.java"
+          ! grep -q 'pivot about 45 degrees' "$SRC/TacticalEngine.java"
+          sha256sum "$SRC/TacticalEngine.java" "$SRC/MainActivity.java" | tee /tmp/R832-SOURCE-SHA256.txt
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Source-lock, no-geometry and combat regression harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          rm -rf /tmp/r832 && mkdir -p /tmp/r832
+          javac -d /tmp/r832 "$SRC/TacticalEngine.java"
+          cat > /tmp/R832Harness.java <<'JAVA'
+          import com.vhanma.hanmacombocalleromega831.TacticalEngine;import java.util.*;
+          public class R832Harness{
+            static long calls=0;static void die(String s){throw new RuntimeException(s);}static TacticalEngine fresh(){return new TacticalEngine(Arrays.asList("1-2"),Arrays.asList("1-2"));}
+            static TacticalEngine.Config cfg(String m,String d,String doc){TacticalEngine.Config c=new TacticalEngine.Config();c.mode=m;c.discipline=d;c.doctrine=doc;c.stance="Orthodox";c.opponent="Adaptive Rival";c.profile="Hanma Adaptive";c.brainMode="Adaptive Balanced";c.difficulty=10;return c;}
+            static boolean fits(String d,String s){String x=d.toLowerCase(),y=s.toLowerCase();if(x.contains("precision"))return y.contains("precision");if(x.contains("fagan"))return y.contains("fagan");if(x.contains("benny"))return y.contains("benny");if(x.contains("world class"))return y.contains("world class");if(x.contains("jeff"))return y.contains("jeff");if(x.contains("wittman"))return y.contains("wittman");if(x.contains("modern"))return y.contains("modern")||y.contains("power of the pros");if(x.contains("52"))return y.contains("52");return true;}
+            public static void main(String[]z){
+              TacticalEngine e=fresh();String v=e.validateKnowledge();if(!v.isEmpty())die(v);if(e.getSourceCallCount()<130)die("source corpus "+e.getSourceCallCount());
+              String[] ds={"Boxing Only","All Striking","Muay Thai","Kickboxing","MMA","52 Blocks Boxing","Hybrid Fight Lab"};for(String d:ds){e.setConfig(cfg("Source Locked",d,"Omega Synthesis"));String prev="";Set<String>u=new HashSet<>();for(int i=0;i<220;i++){TacticalEngine.Result r=e.next(i%7==0?"CLEAN":"RESET");calls++;String q=r.cue.toLowerCase(Locale.US);if(q.contains("degree")||q.contains("°")||q.contains("foot swings around")||q.contains("lead foot initiates"))die("geometry leak "+r.cue);if(r.cue.equals(prev)&&!r.cue.startsWith("NO VERIFIED"))die("adjacent repeat "+r.cue);if(!r.cue.startsWith("NO VERIFIED")&&!"EXACT SOURCE".equals(r.pattern))die("not locked");prev=r.cue;u.add(r.cue);}System.out.println(d+" sourceUnique="+u.size());}
+              String[][] docs={{"Precision Striking","Boxing Only"},{"Muay Thai Guy / Sean Fagan","Muay Thai"},{"Benny Urquidez","Muay Thai"},{"World Class Boxing / Tom Yankello","Boxing Only"},{"MMA Shredded / Jeff Chan","MMA"},{"Trevor Wittman / Gaethje","Boxing Only"},{"Modern Martial Artist","Boxing Only"},{"52 Blocks","52 Blocks Boxing"}};for(String[]x:docs){TacticalEngine t=fresh();t.setConfig(cfg("Source Locked",x[1],x[0]));int hit=0;for(int i=0;i<50;i++){TacticalEngine.Result r=t.next("RESET");calls++;if(!r.cue.startsWith("NO VERIFIED")){hit++;if(!fits(x[0],r.source))die("source mismatch "+x[0]+" => "+r.source);}}if(hit==0)die("empty source pack "+x[0]);}
+              TacticalEngine a=fresh();a.setConfig(cfg("Boxing Only","","Omega Synthesis"));for(int i=0;i<1000;i++){TacticalEngine.Result r=a.next(i%9==0?"COUNTERED":"RESET");calls++;String q=r.cue.toLowerCase(Locale.US);if(q.contains("degree")||q.contains("°")||q.contains("foot swings around")||q.contains("lead foot initiates")||q.contains("rear foot follows"))die("adaptive geometry lecture "+r.cue);if(!a.lastResponseSolvedThreat())die("unsolved "+r.cue);if(a.lastPlanHasLoop())die("loop "+r.cue);}
+              String sp=TacticalEngine.toSpeech("/R/ jab → cross /L/ hook Ω");if(!sp.contains("slip right")||!sp.contains("slip left")||sp.contains("pointing"))die("tts");System.out.println("R8.3.2 SOURCE LOCKED PASS calls="+calls+" sourceCalls="+e.getSourceCallCount());
+            }
+          }
+          JAVA
+          javac -cp /tmp/r832 -d /tmp/r832 /tmp/R832Harness.java
+          timeout 120s java -cp /tmp/r832 R832Harness | tee /tmp/R832-HARNESS-REPORT.txt
+
+      - name: Set R8.3.2 package label and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          sed -i 's/package com\.vhanma\.hanmacombocalleromega831;/package com.vhanma.hanmacombocalleromega832;/' "$SRC/TacticalEngine.java" "$SRC/MainActivity.java"
+          sed -i "s/namespace 'com.vhanma.hanmacombocallerr3'/namespace 'com.vhanma.hanmacombocalleromega832'/" hanma-combo-r3/app/build.gradle
+          sed -i "s/applicationId 'com.vhanma.hanmacombocallerr3'/applicationId 'com.vhanma.hanmacombocalleromega832'/" hanma-combo-r3/app/build.gradle
+          sed -i "s/versionCode [0-9][0-9]*/versionCode 832/" hanma-combo-r3/app/build.gradle
+          sed -i "s/versionName '[^']*'/versionName '8.3.2-Omega-Source-Locked'/" hanma-combo-r3/app/build.gradle
+          sed -i 's/android:label="[^"]*"/android:label="Hanma Combo Caller R8.3.2 Ω"/' hanma-combo-r3/app/src/main/AndroidManifest.xml
+
+      - name: Set up Gradle 8.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          cd hanma-combo-r3
+          /tmp/gradle-dist/gradle-8.2/bin/gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+
+      - name: Build Android release
+        shell: bash
+        run: |
+          set -o pipefail
+          cd hanma-combo-r3
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/r832-build.log
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-r832-source-locked-failure
+          path: |
+            /tmp/r832-build.log
+            /tmp/R832-HARNESS-REPORT.txt
+            /tmp/R832-SOURCE-SHA256.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Verify and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK=dist/Hanma-Combo-Caller-R8.3.2-Omega-Source-Locked.apk
+          cp hanma-combo-r3/app/build/outputs/apk/release/app-release.apk "$APK"
+          BT="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BT/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BT/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
+          grep -q "package: name='com.vhanma.hanmacombocalleromega832'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionCode='832'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionName='8.3.2-Omega-Source-Locked'" dist/APK-BADGING-REPORT.txt
+          grep -q "application-label:'Hanma Combo Caller R8.3.2 Ω'" dist/APK-BADGING-REPORT.txt
+          if grep -q 'uses-permission:' dist/APK-BADGING-REPORT.txt; then echo 'Unexpected runtime permission'; exit 1; fi
+          unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
+          sha256sum "$APK" > dist/Hanma-Combo-Caller-R8.3.2-Omega-Source-Locked-SHA256.txt
+          cp /tmp/R832-HARNESS-REPORT.txt /tmp/R832-SOURCE-SHA256.txt dist/
+          cat > dist/BUILD-REPORT.txt <<'REPORT'
+          HANMA COMBO CALLER R8.3.2 OMEGA SOURCE LOCKED
+          Package: com.vhanma.hanmacombocalleromega832
+          Version: 8.3.2-Omega-Source-Locked / 832
+          Runtime permissions: none
+          Original library: 400 coded + 498 named = 898 preserved slots
+          Source Locked: 136 short verified source sequences indexed at build time. No generated follow-up is added in Source Locked.
+          Provenance classes: OFFICIAL SOURCE / USER-UPLOADED SOURCE / VERIFIED SECONDARY TRANSCRIPTION.
+          Limb policy: preserve source wording/order; only minimal obvious limb normalization such as jab=lead hand, cross=rear hand, and explicit lead/rear limb labels.
+          Geometry policy: no invented degrees or foot-by-foot angle narration in Source Locked or adaptive callouts.
+          R8.3 Adaptive brain, Rapid Call, Repeat Each Call 1x-5x, Branching Spar, Ghost Replay and 898-slot Pure Library remain present.
+          REPORT
+          (cd hanma-combo-r3 && zip -qr ../dist/Hanma-Combo-Caller-R8.3.2-Omega-Source-Locked-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
+          zip -j dist/Hanma-Combo-Caller-R8.3.2-Omega-Source-Locked-Source.zip combo-caller/app/src/main/assets/combos_codes.txt combo-caller/app/src/main/assets/combos_named.txt
+          (cd dist && zip -q Hanma-Combo-Caller-R8.3.2-Omega-Source-Locked-Package.zip Hanma-Combo-Caller-R8.3.2-Omega-Source-Locked.apk Hanma-Combo-Caller-R8.3.2-Omega-Source-Locked-Source.zip Hanma-Combo-Caller-R8.3.2-Omega-Source-Locked-SHA256.txt BUILD-REPORT.txt APK-BADGING-REPORT.txt APK-SIGNATURE-REPORT.txt APK-ARCHIVE-REPORT.txt R832-HARNESS-REPORT.txt R832-SOURCE-SHA256.txt)
+
+      - name: Upload final package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-combo-caller-r832-omega-source-locked-final
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=hanma-combo-r832-omega-source-locked
+          if gh release view "$TAG" >/dev/null 2>&1; then gh release upload "$TAG" dist/* --clobber; else gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "Hanma Combo Caller R8.3.2 Ω Source Locked" --notes "Source Locked release: literal verified source sequences, minimal limb naming, no invented angle-degree narration, while preserving R8.3 adaptive brain, Rapid Call and 1x-5x repetitions."; fi
