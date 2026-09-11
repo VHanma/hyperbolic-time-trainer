@@ -1,0 +1,174 @@
+name: Build Hanma Combo Caller R8.3.1 Directional
+on:
+  push:
+    branches: [ hanma-combo-r3 ]
+    paths:
+      - '.github/workflows/build_hanma_combo_r831_directional.yml'
+      - 'hanma-combo-r3/source_payload/TacticalEngine.r831direction.patch.gz.b64'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct exact R8.3 and apply directional geometry
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_codes.txt)" -eq 400
+          test "$(grep -cve '^\s*$' combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          mkdir -p "$SRC"
+          cat hanma-combo-r3/source_payload/TacticalEngine.omega900.part* | base64 -d | gzip -d > "$SRC/TacticalEngine.java"
+          cat hanma-combo-r3/source_payload/MainActivity.omega900.part* | base64 -d | gzip -d > "$SRC/MainActivity.java"
+          echo 'e8df22a65e5b5e5463e9a982f098b3be7f3b45cd4fbe190c4b04ed9e81d0359a  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          echo '5908b377a71e77a6379a0a75593361874e6cf8147c9436a22d751e4d6645a9c0  '$SRC'/MainActivity.java' | sha256sum -c -
+          python3 hanma-combo-r3/source_payload/rapid820_patch.py "$SRC/MainActivity.java"
+          echo 'f6539340c5bffdeb400246d15a4f798317e5b9282b5f64e783c4519efb9429ab  '$SRC'/MainActivity.java' | sha256sum -c -
+          base64 -d hanma-combo-r3/source_payload/TacticalEngine.r83.patch.gz.b64 | gzip -d > /tmp/r83-engine.patch
+          base64 -d hanma-combo-r3/source_payload/MainActivity.r83.patch.gz.b64 | gzip -d > /tmp/r83-ui.patch
+          patch --fuzz=0 --batch "$SRC/TacticalEngine.java" < /tmp/r83-engine.patch
+          patch --fuzz=0 --batch "$SRC/MainActivity.java" < /tmp/r83-ui.patch
+          echo 'd17eaaa65e2a0ec57b3a259fdc32ae93f285bd5c8d5cc2e860c8a90c1d4d2b7a  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          echo '2f8e22ae1f7d12278dedd91188aa87e212fd813925f7e24aee9a65c8af0cfab4  '$SRC'/MainActivity.java' | sha256sum -c -
+          sed -i 's/package com\.vhanma\.hanmacombocallerr3;/package com.vhanma.hanmacombocalleromega83;/' "$SRC/TacticalEngine.java" "$SRC/MainActivity.java"
+          echo 'e4f1eabee09df20cd5e7ea58f7ced9e23213bbfaa8dea19b1cd54be47f301636  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          echo '653c29af285de8d61b7316acf99f1fc6c864e1e9864fe13d476e9d8b7be893f9  '$SRC'/MainActivity.java' | sha256sum -c -
+          base64 -d hanma-combo-r3/source_payload/TacticalEngine.r831direction.patch.gz.b64 | gzip -d > /tmp/r831-direction.patch
+          patch --fuzz=0 --batch "$SRC/TacticalEngine.java" < /tmp/r831-direction.patch
+          echo 'a9d2dd50a99233f5f135e07de59df1a852e7c91ac22eb19ab73e9b6a15b7b028  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          grep -q 'directionalDefense' "$SRC/TacticalEngine.java"
+          grep -q 'directionalAction' "$SRC/TacticalEngine.java"
+          grep -q 'opponentStanceState' "$SRC/TacticalEngine.java"
+          grep -q 'lead foot' "$SRC/TacticalEngine.java"
+          grep -q 'degree' "$SRC/TacticalEngine.java"
+          sha256sum "$SRC/TacticalEngine.java" "$SRC/MainActivity.java" | tee /tmp/R831-SOURCE-SHA256.txt
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Directional geometry and combat torture harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          rm -rf /tmp/r831 && mkdir -p /tmp/r831
+          javac -d /tmp/r831 "$SRC/TacticalEngine.java"
+          cat > /tmp/R831Harness.java <<'JAVA'
+          import com.vhanma.hanmacombocalleromega83.TacticalEngine;import java.util.*;import java.lang.reflect.*;
+          public class R831Harness{
+            static long calls=0;static final String[] FB={"RESET","CLEAN","LATE","BLOCKED","MISSED","COUNTERED","CLEAN"};
+            static void die(String s){throw new RuntimeException(s);}static boolean any(String s,String...q){s=s.toLowerCase(Locale.US);for(String x:q)if(s.contains(x.toLowerCase(Locale.US)))return true;return false;}
+            static TacticalEngine fresh(){return new TacticalEngine(Arrays.asList("1-2","3-2"),Arrays.asList("1-2","3-2"));}
+            static void combat(){for(String stance:new String[]{"Orthodox","Southpaw"})for(String d:TacticalEngine.DISCIPLINES){TacticalEngine e=fresh();TacticalEngine.Config c=new TacticalEngine.Config();c.mode=d;c.discipline=d;c.stance=stance;c.opponent="Adaptive Rival";c.startRange=(d.equals("Wrestling")||d.equals("No-Gi Grappling"))?"Clinch":"Boxing";c.difficulty=10;e.setConfig(c);Set<String>u=new HashSet<>();for(int i=0;i<140;i++){TacticalEngine.Result r=e.next(FB[i%FB.length]);if(!e.lastResponseSolvedThreat())die("unsolved "+r.cue);if(e.lastPlanHasLoop())die("loop "+r.cue);if(e.lastPlanMorphCount()>1)die("morph "+r.cue);String sp=TacticalEngine.toSpeech(r.cue);if(any(sp,"→","←","/R/","/L/"))die("tts leak");String x=r.cue.toLowerCase(Locale.US);if(x.contains("slip")&&!(x.contains(" left")||x.contains(" right")))die("ambiguous slip "+r.cue);if(x.contains("roll under")&&!(x.contains(" left")||x.contains(" right")))die("ambiguous roll "+r.cue);u.add(r.cue);calls++;}if(u.size()<95)die("low diversity "+d+" "+u.size());}}
+            static void catalog()throws Exception{TacticalEngine e=fresh();TacticalEngine.Config c=new TacticalEngine.Config();c.stance="Orthodox";e.setConfig(c);Class<?> ac=Class.forName("com.vhanma.hanmacombocalleromega83.TacticalEngine$Action"),tc=Class.forName("com.vhanma.hanmacombocalleromega83.TacticalEngine$Threat"),dc=Class.forName("com.vhanma.hanmacombocalleromega83.TacticalEngine$Defense");Field af=TacticalEngine.class.getDeclaredField("actions");af.setAccessible(true);List<?> as=(List<?>)af.get(e);Field ff=ac.getDeclaredField("family"),nf=ac.getDeclaredField("name"),tf=ac.getDeclaredField("tags");ff.setAccessible(true);nf.setAccessible(true);tf.setAccessible(true);Constructor<?> ctor=tc.getDeclaredConstructors()[0];ctor.setAccessible(true);Object dummy=ctor.newInstance("Opponent probes with a stiff jab|jab|Boxing|BSTRKMAFHN|punch,linear,probe|3|260");Method da=TacticalEngine.class.getDeclaredMethod("directionalAction",ac,String.class,String.class,tc);da.setAccessible(true);int strikes=0,angles=0;for(Object a:as){String fam=(String)ff.get(a),name=(String)nf.get(a),out=(String)da.invoke(e,a,"Orthodox","NEUTRAL",dummy),lo=out.toLowerCase(Locale.US);if(any(fam,"jab","straight","hook","uppercut","overhand","lowkick","bodykick","headkick","sidekick","spinkick","teep","knee","elbow")){strikes++;if(!(lo.contains("lead left")||lo.contains("rear right")))die("limb missing "+name+" => "+out);}@SuppressWarnings("unchecked")Set<String>tags=(Set<String>)tf.get(a);if(tags.contains("angle")||tags.contains("pivot")){angles++;if(!lo.contains("degree")||!(lo.contains(" left")||lo.contains(" right")))die("geometry missing "+name+" => "+out);}}
+              Field thf=TacticalEngine.class.getDeclaredField("threats");thf.setAccessible(true);List<?> ts=(List<?>)thf.get(e);Field famf=tc.getDeclaredField("family");famf.setAccessible(true);Map<String,Object> tm=new HashMap<>();for(Object t:ts)tm.put((String)famf.get(t),t);Field db=TacticalEngine.class.getDeclaredField("defenseByThreat");db.setAccessible(true);Map<?,?> dm=(Map<?,?>)db.get(e);Field dn=dc.getDeclaredField("name");dn.setAccessible(true);Method dd=TacticalEngine.class.getDeclaredMethod("directionalDefense",dc,tc,String.class);dd.setAccessible(true);int defs=0;for(Map.Entry<?,?>en:dm.entrySet()){Object t=tm.get((String)en.getKey());for(Object d:(List<?>)en.getValue()){String name=(String)dn.get(d),out=(String)dd.invoke(e,d,t,"Orthodox"),lo=out.toLowerCase(Locale.US);if(any(name,"slip","roll","pivot","angle out","angle off","step outside","open side","off line")){defs++;if(any(name,"slip","roll")&&!(lo.contains(" left")||lo.contains(" right")))die("def side "+name+" => "+out);if(any(name,"pivot","angle out","angle off","step outside","open side","off line")&&!lo.contains("degree"))die("def degree "+name+" => "+out);}}}
+              Field os=TacticalEngine.class.getDeclaredField("opponentStanceState");os.setAccessible(true);Object jab=tm.get("jab");Object jabDef=((List<?>)dm.get("jab")).get(1);os.set(e,"Orthodox");String ortho=(String)dd.invoke(e,jabDef,jab,"Orthodox");os.set(e,"Southpaw");String south=(String)dd.invoke(e,jabDef,jab,"Orthodox");if(!ortho.toLowerCase(Locale.US).contains("right")||!south.toLowerCase(Locale.US).contains("left"))die("opponent stance geometry inactive "+ortho+" / "+south);
+              System.out.println("CATALOG geometry actions="+as.size()+" strikes="+strikes+" angled="+angles+" directionalDefenses="+defs);
+            }
+            public static void main(String[]z)throws Exception{TacticalEngine e=fresh();String v=e.validateKnowledge();if(!v.isEmpty())die(v);catalog();combat();TacticalEngine.Config c=new TacticalEngine.Config();c.mode="MMA";c.opponent="Switch Hitter";c.stance="Orthodox";e.setConfig(c);for(int i=0;i<40;i++)e.next(i%4==0?"CLEAN":"RESET");String st=e.exportCombatState();if(!st.contains("|OS:"))die("opponent stance not persisted");TacticalEngine e2=fresh();e2.importCombatState(st);if(e2.getBrainTotalTrials()!=e.getBrainTotalTrials())die("adaptive memory migration");System.out.println("R8.3.1 DIRECTIONAL PASS calls="+calls+" stateBytes="+st.length());}
+          }
+          JAVA
+          javac -cp /tmp/r831 -d /tmp/r831 /tmp/R831Harness.java
+          timeout 120s java -cp /tmp/r831 R831Harness | tee /tmp/R831-HARNESS-REPORT.txt
+
+      - name: Set R8.3.1 package label and version
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=hanma-combo-r3/app/src/main/java/com/vhanma/hanmacombocallerr3
+          sed -i 's/package com\.vhanma\.hanmacombocalleromega83;/package com.vhanma.hanmacombocalleromega831;/' "$SRC/TacticalEngine.java" "$SRC/MainActivity.java"
+          sed -i "s/namespace 'com.vhanma.hanmacombocallerr3'/namespace 'com.vhanma.hanmacombocalleromega831'/" hanma-combo-r3/app/build.gradle
+          sed -i "s/applicationId 'com.vhanma.hanmacombocallerr3'/applicationId 'com.vhanma.hanmacombocalleromega831'/" hanma-combo-r3/app/build.gradle
+          sed -i "s/versionCode [0-9][0-9]*/versionCode 831/" hanma-combo-r3/app/build.gradle
+          sed -i "s/versionName '[^']*'/versionName '8.3.1-Omega-Directional'/" hanma-combo-r3/app/build.gradle
+          sed -i 's/android:label="[^"]*"/android:label="Hanma Combo Caller R8.3.1 Ω"/' hanma-combo-r3/app/src/main/AndroidManifest.xml
+          sed -i 's/R8\.3 Ω ADAPTIVE FIGHT INTELLIGENCE/R8.3.1 Ω DIRECTIONAL FIGHT IQ/' "$SRC/MainActivity.java"
+          sed -i 's/R8\.3 also learns/R8.3.1 adds stance-aware left\/right limb and footwork geometry while it also learns/' "$SRC/MainActivity.java"
+
+      - name: Set up Gradle 8.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          cd hanma-combo-r3
+          /tmp/gradle-dist/gradle-8.2/bin/gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+
+      - name: Build Android release
+        shell: bash
+        run: |
+          set -o pipefail
+          cd hanma-combo-r3
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/r831-build.log
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-r831-directional-failure
+          path: |
+            /tmp/r831-build.log
+            /tmp/R831-HARNESS-REPORT.txt
+            /tmp/R831-SOURCE-SHA256.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Verify and package
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK=dist/Hanma-Combo-Caller-R8.3.1-Omega-Directional.apk
+          cp hanma-combo-r3/app/build/outputs/apk/release/app-release.apk "$APK"
+          BT="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BT/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BT/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
+          grep -q "package: name='com.vhanma.hanmacombocalleromega831'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionCode='831'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionName='8.3.1-Omega-Directional'" dist/APK-BADGING-REPORT.txt
+          grep -q "application-label:'Hanma Combo Caller R8.3.1 Ω'" dist/APK-BADGING-REPORT.txt
+          if grep -q 'uses-permission:' dist/APK-BADGING-REPORT.txt; then echo 'Unexpected runtime permission'; exit 1; fi
+          unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
+          sha256sum "$APK" > dist/Hanma-Combo-Caller-R8.3.1-Omega-Directional-SHA256.txt
+          cp /tmp/R831-HARNESS-REPORT.txt /tmp/R831-SOURCE-SHA256.txt dist/
+          cat > dist/BUILD-REPORT.txt <<'REPORT'
+          HANMA COMBO CALLER R8.3.1 OMEGA DIRECTIONAL
+          Package: com.vhanma.hanmacombocalleromega831
+          Version: 8.3.1-Omega-Directional / 831
+          Runtime permissions: none
+          Preserves R8.3 adaptive brain, Rapid Call and selectable 1x-5x repetitions.
+          Directional Geometry layer: explicit lead/rear and absolute left/right strike limbs, stance-aware slip/roll directions, initiating/support foot callouts, coaching angles, pivot-foot callouts, stance-switch tracking and opponent-stance-aware geometry.
+          Opponent stance model: Orthodox / Southpaw / Switch Hitter continuity, persisted in combat state.
+          Approximate coaching angles are intentionally labeled as approximate rather than false precision.
+          Original 898 supplied combo slots remain preserved.
+          REPORT
+          (cd hanma-combo-r3 && zip -qr ../dist/Hanma-Combo-Caller-R8.3.1-Omega-Directional-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
+
+      - name: Upload final package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-combo-caller-r831-omega-directional-final
+          path: dist/*
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Publish release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=hanma-combo-r831-omega-directional
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title "Hanma Combo Caller R8.3.1 Omega Directional" --notes "Directional Geometry release: stance-aware left/right slips and rolls, explicit striking limbs, foot-specific angle movement, approximate degrees, opponent stance tracking, and full R8.3 adaptive/Rapid/repetition behavior preserved."
+          fi
