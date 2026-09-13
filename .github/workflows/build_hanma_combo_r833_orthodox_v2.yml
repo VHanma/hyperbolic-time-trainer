@@ -1,0 +1,167 @@
+name: Build Hanma Combo Caller R8.3.3 Orthodox Ruleset v2
+
+on:
+  push:
+    branches: [ hanma-combo-r3 ]
+    paths:
+      - '.github/workflows/build_hanma_combo_r833_orthodox_v2.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct verified R8.3.2 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/r833proj /tmp/combo-caller
+          mkdir -p /tmp/r833proj /tmp/combo-caller/app/src/main/assets
+          curl -fL --retry 3 -o /tmp/r832-source.zip https://github.com/VHanma/hyperbolic-time-trainer/releases/download/hanma-combo-r832-omega-source-locked/Hanma-Combo-Caller-R8.3.2-Omega-Source-Locked-Source.zip
+          unzip -q /tmp/r832-source.zip -d /tmp/r833proj
+          SRC=/tmp/r833proj/app/src/main/java/com/vhanma/hanmacombocallerr3
+          test -f "$SRC/TacticalEngine.java"
+          test -f "$SRC/MainActivity.java"
+          echo 'ddc426716430bdbf63fb21f74dff701307842459e6cf7c94a5557e5afc0adfde  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          echo 'd796c0c9f3e76393531761d959e448d3db2565e4c57daa392c365a15e8665182  '$SRC'/MainActivity.java' | sha256sum -c -
+
+      - name: Apply exact R8.3.3 engine UI and rebuilt 898-call library
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=/tmp/r833proj/app/src/main/java/com/vhanma/hanmacombocallerr3
+          cat hanma-combo-r3/source_payload/TacticalEngine.r833.patch.part* | base64 -d | gzip -d > /tmp/r833e.patch
+          base64 -d hanma-combo-r3/source_payload/MainActivity.r833.patch.gz.b64 | gzip -d > /tmp/r833m.patch
+          patch --fuzz=0 --batch "$SRC/TacticalEngine.java" < /tmp/r833e.patch
+          patch --fuzz=0 --batch "$SRC/MainActivity.java" < /tmp/r833m.patch
+          echo '85e48a6550137105ce815f061ec7220ef383f0dd7b3b2f4c2a26b300dcd5581f  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          echo '5f1fc5cf7e549f18afbfd64ef365caa4b467b038c444a078369ff7fe45a87991  '$SRC'/MainActivity.java' | sha256sum -c -
+          sed -i 's/package com\.vhanma\.hanmacombocalleromega832;/package com.vhanma.hanmacombocalleromega833;/' "$SRC/TacticalEngine.java" "$SRC/MainActivity.java"
+          grep -q '^package com.vhanma.hanmacombocalleromega833;' "$SRC/TacticalEngine.java"
+          grep -q '^package com.vhanma.hanmacombocalleromega833;' "$SRC/MainActivity.java"
+          base64 -d hanma-combo-r3/source_payload/combos_codes.r833.gz.b64 | gzip -d > /tmp/combo-caller/app/src/main/assets/combos_codes.txt
+          base64 -d hanma-combo-r3/source_payload/combos_named.r833.gz.b64 | gzip -d > /tmp/combo-caller/app/src/main/assets/combos_named.txt
+          echo 'ff2094b64cf929b0cafb7b4eaa613e74e8744d21f247ff025672ec116ef5ce54  /tmp/combo-caller/app/src/main/assets/combos_codes.txt' | sha256sum -c -
+          echo '9882599c362bf0f44e3cee18cfce05a76837e67262546361787ff1369bec0404  /tmp/combo-caller/app/src/main/assets/combos_named.txt' | sha256sum -c -
+          test "$(grep -cve '^\s*$' /tmp/combo-caller/app/src/main/assets/combos_codes.txt)" -eq 400
+          test "$(grep -cve '^\s*$' /tmp/combo-caller/app/src/main/assets/combos_named.txt)" -eq 498
+          ! grep -Eiq '\b(lead|rear)\b' /tmp/combo-caller/app/src/main/assets/combos_codes.txt
+          ! grep -Eiq '\b(lead|rear)\b' /tmp/combo-caller/app/src/main/assets/combos_named.txt
+          ! grep -Eiq '\b(front|back) (hand|leg|arm|foot|side)\b' /tmp/combo-caller/app/src/main/assets/combos_codes.txt
+          ! grep -Eiq '\b(front|back) (hand|leg|arm|foot|side)\b' /tmp/combo-caller/app/src/main/assets/combos_named.txt
+          ! grep -qi 'straight-block' "$SRC/TacticalEngine.java"
+          sha256sum "$SRC/TacticalEngine.java" "$SRC/MainActivity.java" /tmp/combo-caller/app/src/main/assets/combos_codes.txt /tmp/combo-caller/app/src/main/assets/combos_named.txt | tee /tmp/R833-SOURCE-SHA256.txt
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Run R8.3.3 orthodox grammar torture harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=/tmp/r833proj/app/src/main/java/com/vhanma/hanmacombocallerr3
+          rm -rf /tmp/r833logic && mkdir -p /tmp/r833logic
+          cp /tmp/combo-caller/app/src/main/assets/combos_codes.txt combo-caller/app/src/main/assets/combos_codes.txt
+          cp /tmp/combo-caller/app/src/main/assets/combos_named.txt combo-caller/app/src/main/assets/combos_named.txt
+          javac -d /tmp/r833logic "$SRC/TacticalEngine.java" hanma-combo-r3/source_payload/R833Harness.java
+          timeout 180s java -cp /tmp/r833logic R833Harness | tee /tmp/R833-HARNESS-REPORT.txt
+          grep -q 'LIB PASS unique=898' /tmp/R833-HARNESS-REPORT.txt
+          grep -q 'R8.3.3 ORTHODOX RULESET PASS' /tmp/R833-HARNESS-REPORT.txt
+
+      - name: Set Android identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i "s/namespace 'com.vhanma.hanmacombocalleromega832'/namespace 'com.vhanma.hanmacombocalleromega833'/" /tmp/r833proj/app/build.gradle
+          sed -i "s/applicationId 'com.vhanma.hanmacombocalleromega832'/applicationId 'com.vhanma.hanmacombocalleromega833'/" /tmp/r833proj/app/build.gradle
+          sed -i "s/versionCode [0-9][0-9]*/versionCode 833/" /tmp/r833proj/app/build.gradle
+          sed -i "s/versionName '[^']*'/versionName '8.3.3-Omega-Orthodox-Ruleset'/" /tmp/r833proj/app/build.gradle
+          sed -i 's/android:label="[^"]*"/android:label="Hanma Combo Caller R8.3.3 Ω"/' /tmp/r833proj/app/src/main/AndroidManifest.xml
+          grep -q "namespace 'com.vhanma.hanmacombocalleromega833'" /tmp/r833proj/app/build.gradle
+          grep -q "applicationId 'com.vhanma.hanmacombocalleromega833'" /tmp/r833proj/app/build.gradle
+          grep -q 'android:name=".MainActivity"' /tmp/r833proj/app/src/main/AndroidManifest.xml
+
+      - name: Build Android release
+        shell: bash
+        run: |
+          set -o pipefail
+          cd /tmp/r833proj
+          chmod +x gradlew
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/r833-build.log
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-r833-orthodox-v2-failure
+          path: |
+            /tmp/r833-build.log
+            /tmp/R833-HARNESS-REPORT.txt
+            /tmp/R833-SOURCE-SHA256.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Verify package and archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK=dist/Hanma-Combo-Caller-R8.3.3-Omega-Orthodox-Ruleset.apk
+          cp /tmp/r833proj/app/build/outputs/apk/release/app-release.apk "$APK"
+          BT="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BT/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BT/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
+          grep -q "package: name='com.vhanma.hanmacombocalleromega833'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionCode='833'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionName='8.3.3-Omega-Orthodox-Ruleset'" dist/APK-BADGING-REPORT.txt
+          grep -q "application-label:'Hanma Combo Caller R8.3.3 Ω'" dist/APK-BADGING-REPORT.txt
+          if grep -q 'uses-permission:' dist/APK-BADGING-REPORT.txt; then echo 'Unexpected runtime permission'; exit 1; fi
+          unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
+          unzip -l "$APK" | grep -q 'assets/combos_codes.txt'
+          unzip -l "$APK" | grep -q 'assets/combos_named.txt'
+          sha256sum "$APK" > dist/Hanma-Combo-Caller-R8.3.3-Omega-Orthodox-Ruleset-SHA256.txt
+          cp /tmp/R833-HARNESS-REPORT.txt /tmp/R833-SOURCE-SHA256.txt dist/
+          cat > dist/BUILD-REPORT.txt <<'REPORT'
+          HANMA COMBO CALLER R8.3.3 OMEGA ORTHODOX RULESET
+          Package: com.vhanma.hanmacombocalleromega833
+          Version: 8.3.3-Omega-Orthodox-Ruleset / 833
+          Runtime permissions: none
+          Rebuilt library: 400 coded + 498 named = 898 unique ruleset calls.
+          Orthodox language: left/right striking limbs only.
+          Terminal strikes resolve to same-side defense; hooks recover to same-side high shield.
+          Crossblocks defend straight attacks and can preload/coils offense.
+          Punch->kick, kick->punch, punch->takedown and fake-takedown->punch transitions are represented.
+          Defense/movement must earn offense or striking position; no standalone wandering.
+          Adaptive brain, Source Locked, Rapid Call, 1x-5x repetitions, Branching Spar and Ghost Replay remain.
+          REPORT
+          (cd /tmp/r833proj && zip -qr "$GITHUB_WORKSPACE/dist/Hanma-Combo-Caller-R8.3.3-Omega-Orthodox-Ruleset-Source.zip" . -x 'app/build/*' '.gradle/*' 'build/*')
+          (cd dist && zip -q Hanma-Combo-Caller-R8.3.3-Omega-Orthodox-Ruleset-Package.zip Hanma-Combo-Caller-R8.3.3-Omega-Orthodox-Ruleset.apk Hanma-Combo-Caller-R8.3.3-Omega-Orthodox-Ruleset-Source.zip Hanma-Combo-Caller-R8.3.3-Omega-Orthodox-Ruleset-SHA256.txt APK-SIGNATURE-REPORT.txt APK-BADGING-REPORT.txt APK-ARCHIVE-REPORT.txt BUILD-REPORT.txt R833-HARNESS-REPORT.txt R833-SOURCE-SHA256.txt)
+
+      - name: Upload final package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-combo-caller-r833-omega-orthodox-v2-final
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish R8.3.3 release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=hanma-combo-r833-omega-orthodox-v2
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title 'Hanma Combo Caller R8.3.3 Ω Orthodox Ruleset' --notes 'Rebuilt 898-call orthodox left/right ruleset with same-side terminal defense, hook-to-high-shield recovery, crossblock coils, punch-kick/takedown transitions, fake-takedown punch setups, and no standalone defensive movement.'
+          fi
