@@ -18,7 +18,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Prepare and verify the 1693-call library
+      - name: Prepare crash-hardened 1693-call library
         shell: bash
         run: |
           set -euo pipefail
@@ -58,6 +58,7 @@ jobs:
           p = Path('app/src/main/java/com/vhanma/purecombocaller/MainActivity.java')
           s = p.read_text(encoding='utf-8')
 
+          # Add the MyCombat asset and preserve every supplied slot.
           needle = 'readAsset("combos_named.txt", "Named combinations");'
           if needle not in s:
               raise SystemExit('Named library load line missing')
@@ -69,8 +70,6 @@ jobs:
               raise SystemExit('Could not remove source dedupe block')
 
           classify_marker = '    private String classify(String raw, String source) {'
-          if classify_marker not in s:
-              raise SystemExit('classify method marker missing')
           tagged_method = '''    private void readTaggedAsset(String filename) {
               try (BufferedReader reader = new BufferedReader(new InputStreamReader(getAssets().open(filename)))) {
                   String line;
@@ -84,12 +83,14 @@ jobs:
                       if (style.isEmpty() || raw.isEmpty()) continue;
                       allCombos.add(new Combo(raw, "MyCombat · " + style));
                   }
-              } catch (Exception e) {
-                  Toast.makeText(this, "Missing " + filename, Toast.LENGTH_LONG).show();
+              } catch (Throwable e) {
+                  Toast.makeText(this, "Could not load " + filename, Toast.LENGTH_LONG).show();
               }
           }
 
           '''
+          if classify_marker not in s:
+              raise SystemExit('classify method marker missing')
           s = s.replace(classify_marker, tagged_method + classify_marker, 1)
 
           styles = [
@@ -104,19 +105,147 @@ jobs:
           s, n = pattern.subn(add_styles, s, count=1)
           if n != 1:
               raise SystemExit('All combinations spinner entry missing')
-
           s = s.replace(' unique combinations loaded', ' callable combinations loaded', 1)
 
-          required = ['readTaggedAsset("mycombat_795.tsv")'] + styles
+          # Voice engine is now lazy. It is no longer touched during app startup.
+          s = s.replace('    private TextToSpeech tts;\n', '    private TextToSpeech tts;\n    private String pendingSpeech;\n', 1)
+
+          old_oncreate = '''    @Override protected void onCreate(Bundle savedInstanceState) {
+              super.onCreate(savedInstanceState);
+              getWindow().setStatusBarColor(BG);
+              getWindow().setNavigationBarColor(BG);
+              tts = new TextToSpeech(this, this);
+              loadCombos();
+              showSetup();
+          }
+          '''
+          new_oncreate = '''    @Override protected void onCreate(Bundle savedInstanceState) {
+              super.onCreate(savedInstanceState);
+              try {
+                  getWindow().setStatusBarColor(BG);
+                  getWindow().setNavigationBarColor(BG);
+              } catch (Throwable ignored) {}
+              try {
+                  loadCombos();
+                  showSetup();
+              } catch (Throwable t) {
+                  showStartupError(t);
+              }
+          }
+          '''
+          if old_oncreate not in s:
+              raise SystemExit('onCreate block missing')
+          s = s.replace(old_oncreate, new_oncreate, 1)
+
+          old_oninit = '''    @Override public void onInit(int status) {
+              if (status == TextToSpeech.SUCCESS) {
+                  ttsReady = true;
+                  tts.setLanguage(Locale.US);
+                  tts.setSpeechRate(speechRate);
+                  tts.setPitch(1.0f);
+              }
+          }
+          '''
+          new_oninit = '''    @Override public void onInit(int status) {
+              if (status == TextToSpeech.SUCCESS && tts != null) {
+                  try {
+                      ttsReady = true;
+                      tts.setLanguage(Locale.US);
+                      tts.setSpeechRate(speechRate);
+                      tts.setPitch(1.0f);
+                      if (pendingSpeech != null) {
+                          String queued = pendingSpeech;
+                          pendingSpeech = null;
+                          tts.speak(queued, TextToSpeech.QUEUE_FLUSH, null, "combo-ready");
+                      }
+                  } catch (Throwable t) {
+                      ttsReady = false;
+                  }
+              }
+          }
+          '''
+          if old_oninit not in s:
+              raise SystemExit('onInit block missing')
+          s = s.replace(old_oninit, new_oninit, 1)
+
+          load_marker = '    private void loadCombos() {'
+          helpers = '''    private void ensureTts() {
+              if (tts != null || ttsReady) return;
+              try {
+                  tts = new TextToSpeech(getApplicationContext(), this);
+              } catch (Throwable t) {
+                  tts = null;
+                  ttsReady = false;
+                  Toast.makeText(this, "Voice engine unavailable. Caller will still run silently.", Toast.LENGTH_LONG).show();
+              }
+          }
+
+          private void showStartupError(Throwable t) {
+              try {
+                  TextView error = new TextView(this);
+                  error.setTextColor(Color.WHITE);
+                  error.setBackgroundColor(BG);
+                  error.setTextSize(18);
+                  error.setPadding(dp(20), dp(30), dp(20), dp(30));
+                  String detail = t.getClass().getSimpleName();
+                  if (t.getMessage() != null && !t.getMessage().trim().isEmpty()) detail += ": " + t.getMessage();
+                  error.setText("PURE COMBO CALLER\\n\\nStartup recovery mode\\n\\n" + detail + "\\n\\nThe process stayed alive so this error can be identified.");
+                  setContentView(error);
+              } catch (Throwable ignored) {}
+          }
+
+          '''
+          if load_marker not in s:
+              raise SystemExit('loadCombos marker missing')
+          s = s.replace(load_marker, helpers + load_marker, 1)
+
+          old_speak = '''    private void speak(String text) {
+              if (!ttsReady) {
+                  Toast.makeText(this, "Voice engine is still loading.", Toast.LENGTH_SHORT).show();
+                  return;
+              }
+              tts.setSpeechRate(speechRate);
+              tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "combo-" + System.nanoTime());
+          }
+          '''
+          new_speak = '''    private void speak(String text) {
+              if (!ttsReady || tts == null) {
+                  pendingSpeech = text;
+                  ensureTts();
+                  return;
+              }
+              try {
+                  tts.setSpeechRate(speechRate);
+                  tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "combo-" + System.nanoTime());
+              } catch (Throwable t) {
+                  ttsReady = false;
+                  tts = null;
+                  Toast.makeText(this, "Voice failed. Training continues silently.", Toast.LENGTH_SHORT).show();
+              }
+          }
+          '''
+          if old_speak not in s:
+              raise SystemExit('speak block missing')
+          s = s.replace(old_speak, new_speak, 1)
+
+          # Null-safe voice shutdown/pause and guarded system UI calls.
+          s = s.replace('if (ttsReady) tts.stop();', 'if (ttsReady && tts != null) tts.stop();')
+          s = s.replace('        leaveImmersive();\n        stopInternal();', '        try { leaveImmersive(); } catch (Throwable ignored) {}\n        stopInternal();', 1)
+          s = s.replace('        enterImmersive();\n        showCallerScreen();', '        try { enterImmersive(); } catch (Throwable ignored) {}\n        showCallerScreen();', 1)
+
+          # Launching a round starts voice initialization, but failure can never block the caller UI.
+          s = s.replace('            prepareActiveList();\n', '            prepareActiveList();\n            ensureTts();\n', 1)
+
+          required = ['readTaggedAsset("mycombat_795.tsv")', 'private void ensureTts()', 'private void showStartupError(Throwable t)'] + styles
           missing = [x for x in required if x not in s]
-          if missing or 'LinkedHashSet<String> seen' in s:
-              raise SystemExit(f'Source patch verification failed: missing={missing}')
+          if missing or 'LinkedHashSet<String> seen' in s or 'tts = new TextToSpeech(this, this);' in s:
+              raise SystemExit(f'Crash-hardening verification failed: missing={missing}')
 
           p.write_text(s, encoding='utf-8')
           PY
 
-          sed -i "s/versionCode 1/versionCode 2/" app/build.gradle
-          sed -i "s/versionName '1.0-PureCaller'/versionName '1.1-1693'/" app/build.gradle
+          sed -i "s/versionCode 1/versionCode 3/" app/build.gradle
+          sed -i "s/versionName '1.0-PureCaller'/versionName '1.2-CrashFix'/" app/build.gradle
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -145,7 +274,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: pure-combo-caller-1693-build-log
+          name: pure-combo-caller-v1.2-crashfix-build-log
           path: /tmp/pure-combo-build.log
           retention-days: 7
 
@@ -154,7 +283,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          APK=dist/Pure-Combo-Caller-v1.1-1693.apk
+          APK=dist/Pure-Combo-Caller-v1.2-CrashFix.apk
           cp combo-caller/app/build/outputs/apk/release/app-release.apk "$APK"
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
@@ -164,39 +293,28 @@ jobs:
             exit 1
           fi
           unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
-          sha256sum "$APK" > dist/Pure-Combo-Caller-v1.1-1693-SHA256.txt
+          unzip -p "$APK" assets/mycombat_795.tsv | grep -cvE '^[[:space:]]*(#|$)' | grep -qx '795'
+          sha256sum "$APK" > dist/Pure-Combo-Caller-v1.2-CrashFix-SHA256.txt
           cat > dist/BUILD-REPORT.txt <<'REPORT'
-          PURE COMBO CALLER V1.1 - 1693 CALLS
+          PURE COMBO CALLER V1.2 - CRASHFIX
           Package: com.vhanma.purecombocaller
           Combination slots: 1693
           Existing coded slots: 400
           Existing named slots: 498
           MyCombat imported slots: 795
-          MyCombat Boxing: 100
-          MyCombat Kickboxing: 100
-          MyCombat Muay Thai: 95
-          MyCombat MMA: 100
-          MyCombat Combat Sambo: 100
-          MyCombat BJJ: 150
-          MyCombat Wrestling: 100
-          MyCombat Judo: 50
-          Camera: absent
-          Video analysis: absent
-          Pose detection: absent
-          Network: absent
+          Voice initialization: lazy / startup-safe
+          Startup recovery screen: enabled
+          System UI calls: guarded
+          Asset reads: guarded
           Runtime permissions: none
-          Repeat options: 1, 2, 3, 5, 10, 20
-          Order modes: random, shuffle deck, sequential
-          Call intervals: 2, 3, 4, 5, 6, 8, 10, 12, 15 seconds
-          Round lengths: 1, 3, 5, 10, 20 minutes, endless
-          Voice: Android offline-capable TextToSpeech engine
+          Network: absent
           REPORT
-          (cd combo-caller && zip -qr ../dist/Pure-Combo-Caller-v1.1-1693-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
+          (cd combo-caller && zip -qr ../dist/Pure-Combo-Caller-v1.2-CrashFix-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: pure-combo-caller-v1.1-1693
+          name: pure-combo-caller-v1.2-crashfix
           path: dist/*
           if-no-files-found: error
           retention-days: 30
