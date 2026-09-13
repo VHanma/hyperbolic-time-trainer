@@ -18,7 +18,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Prepare crash-hardened 1693-call library
+      - name: Prepare v1.3 WindowFix 1693-call library
         shell: bash
         run: |
           set -euo pipefail
@@ -96,7 +96,6 @@ jobs:
               raise SystemExit('Library spinner marker missing')
           s = s.replace(' unique combinations loaded', ' callable combinations loaded', 1)
 
-          # Replace launch path by signature boundaries, independent of whitespace.
           oncreate_start = s.index('    @Override protected void onCreate(Bundle savedInstanceState) {')
           oninit_start = s.index('    @Override public void onInit(int status) {', oncreate_start)
           new_oncreate = '''    @Override protected void onCreate(Bundle savedInstanceState) {
@@ -189,19 +188,35 @@ jobs:
           '''
           s = s[:speak_start] + new_speak + s[immersive_start:]
 
+          # Motorola/Android 16 fix: completely remove WindowInsetsController from runtime.
+          immersive_start = s.index('    private void enterImmersive() {')
+          back_start = s.index('    @Override public void onBackPressed() {', immersive_start)
+          safe_screen = '''    private void enterImmersive() {
+              immersive = true;
+              try {
+                  getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+              } catch (Throwable ignored) {}
+          }
+
+          private void leaveImmersive() {
+              immersive = false;
+          }
+
+          '''
+          s = s[:immersive_start] + safe_screen + s[back_start:]
+
           s = s.replace('if (ttsReady) tts.stop();', 'if (ttsReady && tts != null) tts.stop();')
-          s = s.replace('        enterImmersive();\n        showCallerScreen();', '        try { enterImmersive(); } catch (Throwable ignored) {}\n        showCallerScreen();', 1)
           s = s.replace('            prepareActiveList();\n', '            prepareActiveList();\n            ensureTts();\n', 1)
 
           required = ['readTaggedAsset("mycombat_795.tsv")','private void ensureTts()','private void showStartupError(Throwable t)','private String pendingSpeech;'] + styles
           missing = [x for x in required if x not in s]
-          if missing or 'tts = new TextToSpeech(this, this);' in s or 'LinkedHashSet<String> seen' in s:
-              raise SystemExit(f'Patch verification failed: {missing}')
+          if missing or 'tts = new TextToSpeech(this, this);' in s or 'LinkedHashSet<String> seen' in s or 'getInsetsController()' in s or 'WindowInsetsController controller' in s:
+              raise SystemExit(f'Patch verification failed: missing={missing}')
           p.write_text(s, encoding='utf-8')
           PY
 
-          sed -i "s/versionCode 1/versionCode 3/" app/build.gradle
-          sed -i "s/versionName '1.0-PureCaller'/versionName '1.2-CrashFix'/" app/build.gradle
+          sed -i "s/versionCode 1/versionCode 4/" app/build.gradle
+          sed -i "s/versionName '1.0-PureCaller'/versionName '1.3-WindowFix'/" app/build.gradle
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -230,7 +245,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: pure-combo-caller-v1.2-crashfix-build-log
+          name: pure-combo-caller-v1.3-windowfix-build-log
           path: /tmp/pure-combo-build.log
           retention-days: 7
 
@@ -239,7 +254,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          APK=dist/Pure-Combo-Caller-v1.2-CrashFix.apk
+          APK=dist/Pure-Combo-Caller-v1.3-WindowFix.apk
           cp combo-caller/app/build/outputs/apk/release/app-release.apk "$APK"
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
@@ -247,23 +262,24 @@ jobs:
           if grep -q "uses-permission:" dist/APK-BADGING-REPORT.txt; then exit 1; fi
           unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
           test "$(unzip -p "$APK" assets/mycombat_795.tsv | grep -cvE '^[[:space:]]*(#|$)')" -eq 795
-          sha256sum "$APK" > dist/Pure-Combo-Caller-v1.2-CrashFix-SHA256.txt
+          sha256sum "$APK" > dist/Pure-Combo-Caller-v1.3-WindowFix-SHA256.txt
           cat > dist/BUILD-REPORT.txt <<'REPORT'
-          PURE COMBO CALLER V1.2 - CRASHFIX
+          PURE COMBO CALLER V1.3 - WINDOWFIX
           1693 combination slots
           795 MyCombat calls verified inside APK
+          WindowInsetsController runtime path removed
           TextToSpeech removed from launch path
           Lazy voice initialization enabled
           Startup recovery screen enabled
           Runtime permissions: none
           Network: absent
           REPORT
-          (cd combo-caller && zip -qr ../dist/Pure-Combo-Caller-v1.2-CrashFix-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
+          (cd combo-caller && zip -qr ../dist/Pure-Combo-Caller-v1.3-WindowFix-Source.zip . -x 'app/build/*' '.gradle/*' 'build/*')
 
       - name: Upload final package
         uses: actions/upload-artifact@v4
         with:
-          name: pure-combo-caller-v1.2-crashfix
+          name: pure-combo-caller-v1.3-windowfix
           path: dist/*
           if-no-files-found: error
           retention-days: 30
