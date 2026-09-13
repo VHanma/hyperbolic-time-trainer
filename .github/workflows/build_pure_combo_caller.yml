@@ -23,7 +23,6 @@ jobs:
         run: |
           set -euo pipefail
           cd combo-caller
-
           test "$(grep -cve '^\s*$' app/src/main/assets/combos_codes.txt)" -eq 400
           test "$(grep -cve '^\s*$' app/src/main/assets/combos_named.txt)" -eq 498
           base64 -d app/src/main/assets/mycombat_795.tsv.gz.b64 | gunzip > app/src/main/assets/mycombat_795.tsv
@@ -47,30 +46,27 @@ jobs:
                   raise SystemExit(f'Bad MyCombat row: {raw!r}')
               counts[style] += 1
               total += 1
-
-          expected = {
-              'Boxing': 100, 'Kickboxing': 100, 'Muay Thai': 95, 'MMA': 100,
-              'Combat Sambo': 100, 'BJJ': 150, 'Wrestling': 100, 'Judo': 50,
-          }
+          expected = {'Boxing':100,'Kickboxing':100,'Muay Thai':95,'MMA':100,'Combat Sambo':100,'BJJ':150,'Wrestling':100,'Judo':50}
           if total != 795 or dict(counts) != expected:
               raise SystemExit(f'MyCombat verification failed: total={total}, counts={dict(counts)}')
 
           p = Path('app/src/main/java/com/vhanma/purecombocaller/MainActivity.java')
           s = p.read_text(encoding='utf-8')
 
-          # Add the MyCombat asset and preserve every supplied slot.
           needle = 'readAsset("combos_named.txt", "Named combinations");'
           if needle not in s:
               raise SystemExit('Named library load line missing')
           s = s.replace(needle, needle + '\n        readTaggedAsset("mycombat_795.tsv");', 1)
 
           cleanup = re.compile(r'\n\s*LinkedHashSet<String> seen = new LinkedHashSet<>\(\);.*?allCombos\.addAll\(clean\);\s*', re.S)
-          s, n = cleanup.subn('\n        // Preserve all supplied slots, including intentional repeats and cross-style duplicates.\n', s, count=1)
+          s, n = cleanup.subn('\n        // Preserve all supplied slots, including intentional repeats.\n', s, count=1)
           if n != 1:
-              raise SystemExit('Could not remove source dedupe block')
+              raise SystemExit('Could not remove dedupe block')
 
           classify_marker = '    private String classify(String raw, String source) {'
-          tagged_method = '''    private void readTaggedAsset(String filename) {
+          if classify_marker not in s:
+              raise SystemExit('classify marker missing')
+          tagged = '''    private void readTaggedAsset(String filename) {
               try (BufferedReader reader = new BufferedReader(new InputStreamReader(getAssets().open(filename)))) {
                   String line;
                   while ((line = reader.readLine()) != null) {
@@ -80,8 +76,7 @@ jobs:
                       if (parts.length != 2) continue;
                       String style = parts[0].trim();
                       String raw = parts[1].trim();
-                      if (style.isEmpty() || raw.isEmpty()) continue;
-                      allCombos.add(new Combo(raw, "MyCombat · " + style));
+                      if (!style.isEmpty() && !raw.isEmpty()) allCombos.add(new Combo(raw, "MyCombat · " + style));
                   }
               } catch (Throwable e) {
                   Toast.makeText(this, "Could not load " + filename, Toast.LENGTH_LONG).show();
@@ -89,36 +84,21 @@ jobs:
           }
 
           '''
-          if classify_marker not in s:
-              raise SystemExit('classify method marker missing')
-          s = s.replace(classify_marker, tagged_method + classify_marker, 1)
+          s = s.replace(classify_marker, tagged + classify_marker, 1)
 
-          styles = [
-              'MyCombat · Boxing', 'MyCombat · Kickboxing', 'MyCombat · Muay Thai',
-              'MyCombat · MMA', 'MyCombat · Combat Sambo', 'MyCombat · BJJ',
-              'MyCombat · Wrestling', 'MyCombat · Judo'
-          ]
+          styles = ['MyCombat · Boxing','MyCombat · Kickboxing','MyCombat · Muay Thai','MyCombat · MMA','MyCombat · Combat Sambo','MyCombat · BJJ','MyCombat · Wrestling','MyCombat · Judo']
           pattern = re.compile(r'(?m)^(\s*)"All combinations",\s*$')
-          def add_styles(match):
-              indent = match.group(1)
-              return match.group(0) + '\n' + '\n'.join(indent + '"' + x + '",' for x in styles)
+          def add_styles(m):
+              ind = m.group(1)
+              return m.group(0) + '\n' + '\n'.join(ind + '"' + x + '",' for x in styles)
           s, n = pattern.subn(add_styles, s, count=1)
           if n != 1:
-              raise SystemExit('All combinations spinner entry missing')
+              raise SystemExit('Library spinner marker missing')
           s = s.replace(' unique combinations loaded', ' callable combinations loaded', 1)
 
-          # Voice engine is now lazy. It is no longer touched during app startup.
-          s = s.replace('    private TextToSpeech tts;\n', '    private TextToSpeech tts;\n    private String pendingSpeech;\n', 1)
-
-          old_oncreate = '''    @Override protected void onCreate(Bundle savedInstanceState) {
-              super.onCreate(savedInstanceState);
-              getWindow().setStatusBarColor(BG);
-              getWindow().setNavigationBarColor(BG);
-              tts = new TextToSpeech(this, this);
-              loadCombos();
-              showSetup();
-          }
-          '''
+          # Replace launch path by signature boundaries, independent of whitespace.
+          oncreate_start = s.index('    @Override protected void onCreate(Bundle savedInstanceState) {')
+          oninit_start = s.index('    @Override public void onInit(int status) {', oncreate_start)
           new_oncreate = '''    @Override protected void onCreate(Bundle savedInstanceState) {
               super.onCreate(savedInstanceState);
               try {
@@ -132,21 +112,13 @@ jobs:
                   showStartupError(t);
               }
           }
-          '''
-          if old_oncreate not in s:
-              raise SystemExit('onCreate block missing')
-          s = s.replace(old_oncreate, new_oncreate, 1)
 
-          old_oninit = '''    @Override public void onInit(int status) {
-              if (status == TextToSpeech.SUCCESS) {
-                  ttsReady = true;
-                  tts.setLanguage(Locale.US);
-                  tts.setSpeechRate(speechRate);
-                  tts.setPitch(1.0f);
-              }
-          }
           '''
-          new_oninit = '''    @Override public void onInit(int status) {
+          s = s[:oncreate_start] + new_oncreate + s[oninit_start:]
+
+          oninit_start = s.index('    @Override public void onInit(int status) {')
+          load_start = s.index('    private void loadCombos() {', oninit_start)
+          new_voice = '''    @Override public void onInit(int status) {
               if (status == TextToSpeech.SUCCESS && tts != null) {
                   try {
                       ttsReady = true;
@@ -163,20 +135,15 @@ jobs:
                   }
               }
           }
-          '''
-          if old_oninit not in s:
-              raise SystemExit('onInit block missing')
-          s = s.replace(old_oninit, new_oninit, 1)
 
-          load_marker = '    private void loadCombos() {'
-          helpers = '''    private void ensureTts() {
+          private void ensureTts() {
               if (tts != null || ttsReady) return;
               try {
                   tts = new TextToSpeech(getApplicationContext(), this);
               } catch (Throwable t) {
                   tts = null;
                   ttsReady = false;
-                  Toast.makeText(this, "Voice engine unavailable. Caller will still run silently.", Toast.LENGTH_LONG).show();
+                  Toast.makeText(this, "Voice unavailable. Caller will run silently.", Toast.LENGTH_LONG).show();
               }
           }
 
@@ -189,25 +156,20 @@ jobs:
                   error.setPadding(dp(20), dp(30), dp(20), dp(30));
                   String detail = t.getClass().getSimpleName();
                   if (t.getMessage() != null && !t.getMessage().trim().isEmpty()) detail += ": " + t.getMessage();
-                  error.setText("PURE COMBO CALLER\\n\\nStartup recovery mode\\n\\n" + detail + "\\n\\nThe process stayed alive so this error can be identified.");
+                  error.setText("PURE COMBO CALLER\\n\\nStartup recovery mode\\n\\n" + detail);
                   setContentView(error);
               } catch (Throwable ignored) {}
           }
 
           '''
-          if load_marker not in s:
-              raise SystemExit('loadCombos marker missing')
-          s = s.replace(load_marker, helpers + load_marker, 1)
+          s = s[:oninit_start] + new_voice + s[load_start:]
 
-          old_speak = '''    private void speak(String text) {
-              if (!ttsReady) {
-                  Toast.makeText(this, "Voice engine is still loading.", Toast.LENGTH_SHORT).show();
-                  return;
-              }
-              tts.setSpeechRate(speechRate);
-              tts.speak(text, TextToSpeech.QUEUE_FLUSH, null, "combo-" + System.nanoTime());
-          }
-          '''
+          if '    private TextToSpeech tts;\n' not in s:
+              raise SystemExit('TTS field missing')
+          s = s.replace('    private TextToSpeech tts;\n', '    private TextToSpeech tts;\n    private String pendingSpeech;\n', 1)
+
+          speak_start = s.index('    private void speak(String text) {')
+          immersive_start = s.index('    private void enterImmersive() {', speak_start)
           new_speak = '''    private void speak(String text) {
               if (!ttsReady || tts == null) {
                   pendingSpeech = text;
@@ -223,24 +185,18 @@ jobs:
                   Toast.makeText(this, "Voice failed. Training continues silently.", Toast.LENGTH_SHORT).show();
               }
           }
+
           '''
-          if old_speak not in s:
-              raise SystemExit('speak block missing')
-          s = s.replace(old_speak, new_speak, 1)
+          s = s[:speak_start] + new_speak + s[immersive_start:]
 
-          # Null-safe voice shutdown/pause and guarded system UI calls.
           s = s.replace('if (ttsReady) tts.stop();', 'if (ttsReady && tts != null) tts.stop();')
-          s = s.replace('        leaveImmersive();\n        stopInternal();', '        try { leaveImmersive(); } catch (Throwable ignored) {}\n        stopInternal();', 1)
           s = s.replace('        enterImmersive();\n        showCallerScreen();', '        try { enterImmersive(); } catch (Throwable ignored) {}\n        showCallerScreen();', 1)
-
-          # Launching a round starts voice initialization, but failure can never block the caller UI.
           s = s.replace('            prepareActiveList();\n', '            prepareActiveList();\n            ensureTts();\n', 1)
 
-          required = ['readTaggedAsset("mycombat_795.tsv")', 'private void ensureTts()', 'private void showStartupError(Throwable t)'] + styles
+          required = ['readTaggedAsset("mycombat_795.tsv")','private void ensureTts()','private void showStartupError(Throwable t)','private String pendingSpeech;'] + styles
           missing = [x for x in required if x not in s]
-          if missing or 'LinkedHashSet<String> seen' in s or 'tts = new TextToSpeech(this, this);' in s:
-              raise SystemExit(f'Crash-hardening verification failed: missing={missing}')
-
+          if missing or 'tts = new TextToSpeech(this, this);' in s or 'LinkedHashSet<String> seen' in s:
+              raise SystemExit(f'Patch verification failed: {missing}')
           p.write_text(s, encoding='utf-8')
           PY
 
@@ -288,24 +244,17 @@ jobs:
           BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
           "$BUILD_TOOLS/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
-          if grep -q "uses-permission:" dist/APK-BADGING-REPORT.txt; then
-            echo 'Pure caller unexpectedly requests a permission'
-            exit 1
-          fi
+          if grep -q "uses-permission:" dist/APK-BADGING-REPORT.txt; then exit 1; fi
           unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
-          unzip -p "$APK" assets/mycombat_795.tsv | grep -cvE '^[[:space:]]*(#|$)' | grep -qx '795'
+          test "$(unzip -p "$APK" assets/mycombat_795.tsv | grep -cvE '^[[:space:]]*(#|$)')" -eq 795
           sha256sum "$APK" > dist/Pure-Combo-Caller-v1.2-CrashFix-SHA256.txt
           cat > dist/BUILD-REPORT.txt <<'REPORT'
           PURE COMBO CALLER V1.2 - CRASHFIX
-          Package: com.vhanma.purecombocaller
-          Combination slots: 1693
-          Existing coded slots: 400
-          Existing named slots: 498
-          MyCombat imported slots: 795
-          Voice initialization: lazy / startup-safe
-          Startup recovery screen: enabled
-          System UI calls: guarded
-          Asset reads: guarded
+          1693 combination slots
+          795 MyCombat calls verified inside APK
+          TextToSpeech removed from launch path
+          Lazy voice initialization enabled
+          Startup recovery screen enabled
           Runtime permissions: none
           Network: absent
           REPORT
