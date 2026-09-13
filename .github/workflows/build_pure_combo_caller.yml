@@ -26,13 +26,13 @@ jobs:
 
           test "$(grep -cve '^\s*$' app/src/main/assets/combos_codes.txt)" -eq 400
           test "$(grep -cve '^\s*$' app/src/main/assets/combos_named.txt)" -eq 498
-
           base64 -d app/src/main/assets/mycombat_795.tsv.gz.b64 | gunzip > app/src/main/assets/mycombat_795.tsv
           test "$(grep -cvE '^[[:space:]]*(#|$)' app/src/main/assets/mycombat_795.tsv)" -eq 795
 
           python - <<'PY'
           from pathlib import Path
           from collections import Counter
+          import re
 
           data = Path('app/src/main/assets/mycombat_795.tsv')
           counts = Counter()
@@ -42,22 +42,15 @@ jobs:
               if not line or line.startswith('#'):
                   continue
               style, combo = raw.split('\t', 1)
-              style = style.strip()
-              combo = combo.strip()
+              style, combo = style.strip(), combo.strip()
               if not style or not combo:
                   raise SystemExit(f'Bad MyCombat row: {raw!r}')
               counts[style] += 1
               total += 1
 
           expected = {
-              'Boxing': 100,
-              'Kickboxing': 100,
-              'Muay Thai': 95,
-              'MMA': 100,
-              'Combat Sambo': 100,
-              'BJJ': 150,
-              'Wrestling': 100,
-              'Judo': 50,
+              'Boxing': 100, 'Kickboxing': 100, 'Muay Thai': 95, 'MMA': 100,
+              'Combat Sambo': 100, 'BJJ': 150, 'Wrestling': 100, 'Judo': 50,
           }
           if total != 795 or dict(counts) != expected:
               raise SystemExit(f'MyCombat verification failed: total={total}, counts={dict(counts)}')
@@ -65,33 +58,19 @@ jobs:
           p = Path('app/src/main/java/com/vhanma/purecombocaller/MainActivity.java')
           s = p.read_text(encoding='utf-8')
 
-          old_load = '''        readAsset("combos_codes.txt", "Code combinations");
-          readAsset("combos_named.txt", "Named combinations");
-          '''
-          new_load = '''        readAsset("combos_codes.txt", "Code combinations");
-          readAsset("combos_named.txt", "Named combinations");
-          readTaggedAsset("mycombat_795.tsv");
-          '''
-          if old_load not in s:
-              raise SystemExit('Expected loadCombos asset block missing')
-          s = s.replace(old_load, new_load, 1)
+          needle = 'readAsset("combos_named.txt", "Named combinations");'
+          if needle not in s:
+              raise SystemExit('Named library load line missing')
+          s = s.replace(needle, needle + '\n        readTaggedAsset("mycombat_795.tsv");', 1)
 
-          old_cleanup = '''        LinkedHashSet<String> seen = new LinkedHashSet<>();
-          List<Combo> clean = new ArrayList<>();
-          for (Combo combo : allCombos) {
-              String key = combo.raw.trim();
-              if (key.isEmpty()) continue;
-              if (seen.add(key)) clean.add(combo);
-          }
-          allCombos.clear();
-          allCombos.addAll(clean);
-          '''
-          if old_cleanup not in s:
-              raise SystemExit('Expected combo cleanup block missing')
-          s = s.replace(old_cleanup, '''        // Preserve every supplied slot, including intentional repeats and cross-style duplicates.\n''', 1)
+          cleanup = re.compile(r'\n\s*LinkedHashSet<String> seen = new LinkedHashSet<>\(\);.*?allCombos\.addAll\(clean\);\s*', re.S)
+          s, n = cleanup.subn('\n        // Preserve all supplied slots, including intentional repeats and cross-style duplicates.\n', s, count=1)
+          if n != 1:
+              raise SystemExit('Could not remove source dedupe block')
 
-          marker = '''    private String classify(String raw, String source) {
-          '''
+          classify_marker = '    private String classify(String raw, String source) {'
+          if classify_marker not in s:
+              raise SystemExit('classify method marker missing')
           tagged_method = '''    private void readTaggedAsset(String filename) {
               try (BufferedReader reader = new BufferedReader(new InputStreamReader(getAssets().open(filename)))) {
                   String line;
@@ -110,45 +89,32 @@ jobs:
               }
           }
 
-              private String classify(String raw, String source) {
           '''
-          if marker not in s:
-              raise SystemExit('Expected classify marker missing')
-          s = s.replace(marker, tagged_method, 1)
+          s = s.replace(classify_marker, tagged_method + classify_marker, 1)
 
-          old_spinner = '''        Spinner category = spinner(new String[]{
-                  "All combinations",
-                  "Coded library",
-                  "Named boxing",
-                  "Muay Thai and kickboxing",
-                  "Defense and footwork"
-          });
-          '''
-          new_spinner = '''        Spinner category = spinner(new String[]{
-                  "All combinations",
-                  "MyCombat · Boxing",
-                  "MyCombat · Kickboxing",
-                  "MyCombat · Muay Thai",
-                  "MyCombat · MMA",
-                  "MyCombat · Combat Sambo",
-                  "MyCombat · BJJ",
-                  "MyCombat · Wrestling",
-                  "MyCombat · Judo",
-                  "Coded library",
-                  "Named boxing",
-                  "Muay Thai and kickboxing",
-                  "Defense and footwork"
-          });
-          '''
-          if old_spinner not in s:
-              raise SystemExit('Expected library spinner block missing')
-          s = s.replace(old_spinner, new_spinner, 1)
-          s = s.replace('" unique combinations loaded"', '" callable combinations loaded"', 1)
+          styles = [
+              'MyCombat · Boxing', 'MyCombat · Kickboxing', 'MyCombat · Muay Thai',
+              'MyCombat · MMA', 'MyCombat · Combat Sambo', 'MyCombat · BJJ',
+              'MyCombat · Wrestling', 'MyCombat · Judo'
+          ]
+          pattern = re.compile(r'(?m)^(\s*)"All combinations",\s*$')
+          def add_styles(match):
+              indent = match.group(1)
+              return match.group(0) + '\n' + '\n'.join(indent + '"' + x + '",' for x in styles)
+          s, n = pattern.subn(add_styles, s, count=1)
+          if n != 1:
+              raise SystemExit('All combinations spinner entry missing')
+
+          s = s.replace(' unique combinations loaded', ' callable combinations loaded', 1)
+
+          required = ['readTaggedAsset("mycombat_795.tsv")'] + styles
+          missing = [x for x in required if x not in s]
+          if missing or 'LinkedHashSet<String> seen' in s:
+              raise SystemExit(f'Source patch verification failed: missing={missing}')
 
           p.write_text(s, encoding='utf-8')
           PY
 
-          # Give this build a distinct version label while retaining the same package.
           sed -i "s/versionCode 1/versionCode 2/" app/build.gradle
           sed -i "s/versionName '1.0-PureCaller'/versionName '1.1-1693'/" app/build.gradle
 
@@ -200,7 +166,7 @@ jobs:
           unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
           sha256sum "$APK" > dist/Pure-Combo-Caller-v1.1-1693-SHA256.txt
           cat > dist/BUILD-REPORT.txt <<'REPORT'
-          PURE COMBO CALLER V1.1 — 1693 CALLS
+          PURE COMBO CALLER V1.1 - 1693 CALLS
           Package: com.vhanma.purecombocaller
           Combination slots: 1693
           Existing coded slots: 400
