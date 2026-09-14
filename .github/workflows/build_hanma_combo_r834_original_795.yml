@@ -1,0 +1,167 @@
+name: Build Hanma Combo Caller R8.3.4 Original 795
+
+on:
+  push:
+    branches: [ hanma-combo-r3 ]
+    paths:
+      - '.github/workflows/build_hanma_combo_r834_original_795.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reconstruct verified R8.3.3 baseline
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf /tmp/r834proj /tmp/combo-caller
+          mkdir -p /tmp/r834proj /tmp/combo-caller/app/src/main/assets
+          curl -fL --retry 3 -o /tmp/r833-source.zip https://github.com/VHanma/hyperbolic-time-trainer/releases/download/hanma-combo-r833-omega-orthodox-v2/Hanma-Combo-Caller-R8.3.3-Omega-Orthodox-Ruleset-Source.zip
+          unzip -q /tmp/r833-source.zip -d /tmp/r834proj
+          SRC=/tmp/r834proj/app/src/main/java/com/vhanma/hanmacombocallerr3
+          echo '85e48a6550137105ce815f061ec7220ef383f0dd7b3b2f4c2a26b300dcd5581f  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          echo '5f1fc5cf7e549f18afbfd64ef365caa4b467b038c444a078369ff7fe45a87991  '$SRC'/MainActivity.java' | sha256sum -c -
+          grep -q '^package com.vhanma.hanmacombocalleromega833;' "$SRC/TacticalEngine.java"
+
+      - name: Add exact 795 MyCombat originals without rewriting them
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=/tmp/r834proj/app/src/main/java/com/vhanma/hanmacombocallerr3
+          base64 -d hanma-combo-r3/source_payload/TacticalEngine.r834.patch.gz.b64 | gzip -d > /tmp/r834e.patch
+          base64 -d hanma-combo-r3/source_payload/MainActivity.r834.patch.gz.b64 | gzip -d > /tmp/r834m.patch
+          patch --fuzz=0 --batch "$SRC/TacticalEngine.java" < /tmp/r834e.patch
+          patch --fuzz=0 --batch "$SRC/MainActivity.java" < /tmp/r834m.patch
+          echo 'a66d754bd66fe37977cdd5d32efa4b7d390de01b3b46564f5c2a04ee0fa6d266  '$SRC'/TacticalEngine.java' | sha256sum -c -
+          echo 'ae47e1782382bfc3860f30f93fba5796ad49841aaa8d4bb6c1c55b1951d2276e  '$SRC'/MainActivity.java' | sha256sum -c -
+
+          base64 -d hanma-combo-r3/source_payload/combos_codes.r833.gz.b64 | gzip -d > /tmp/combo-caller/app/src/main/assets/combos_codes.txt
+          base64 -d hanma-combo-r3/source_payload/combos_named.r833.gz.b64 | gzip -d > /tmp/combo-caller/app/src/main/assets/combos_named.txt
+          base64 -d hanma-combo-r3/source_payload/mycombat_original_795.txt.gz.b64 | gzip -d > /tmp/combo-caller/app/src/main/assets/mycombat_original_795.txt
+          echo 'ff2094b64cf929b0cafb7b4eaa613e74e8744d21f247ff025672ec116ef5ce54  /tmp/combo-caller/app/src/main/assets/combos_codes.txt' | sha256sum -c -
+          echo '9882599c362bf0f44e3cee18cfce05a76837e67262546361787ff1369bec0404  /tmp/combo-caller/app/src/main/assets/combos_named.txt' | sha256sum -c -
+          echo '627d1aef21af981e175e4a361919e72aaeea7533ebe5de44eab661be9d26b1e5  /tmp/combo-caller/app/src/main/assets/mycombat_original_795.txt' | sha256sum -c -
+          test "$(grep -Ec '^[0-9]{3}\. ' /tmp/combo-caller/app/src/main/assets/mycombat_original_795.txt)" -eq 795
+          grep -q '^===== Boxing (100) =====$' /tmp/combo-caller/app/src/main/assets/mycombat_original_795.txt
+          grep -q '^===== Kickboxing (100) =====$' /tmp/combo-caller/app/src/main/assets/mycombat_original_795.txt
+          grep -q '^===== Muay Thai (95) =====$' /tmp/combo-caller/app/src/main/assets/mycombat_original_795.txt
+          grep -q '^===== MMA (100) =====$' /tmp/combo-caller/app/src/main/assets/mycombat_original_795.txt
+          grep -q '^===== Combat Sambo (100) =====$' /tmp/combo-caller/app/src/main/assets/mycombat_original_795.txt
+          grep -q '^===== BJJ (150) =====$' /tmp/combo-caller/app/src/main/assets/mycombat_original_795.txt
+          grep -q '^===== Wrestling (100) =====$' /tmp/combo-caller/app/src/main/assets/mycombat_original_795.txt
+          grep -q '^===== Judo (50) =====$' /tmp/combo-caller/app/src/main/assets/mycombat_original_795.txt
+          sha256sum "$SRC/TacticalEngine.java" "$SRC/MainActivity.java" /tmp/combo-caller/app/src/main/assets/*.txt | tee /tmp/R834-SOURCE-SHA256.txt
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Verify all 795 style records are callable verbatim
+        shell: bash
+        run: |
+          set -euo pipefail
+          SRC=/tmp/r834proj/app/src/main/java/com/vhanma/hanmacombocallerr3
+          rm -rf /tmp/r834logic && mkdir -p /tmp/r834logic
+          javac -d /tmp/r834logic "$SRC/TacticalEngine.java" hanma-combo-r3/source_payload/R834Original795Harness.java
+          timeout 180s java -cp /tmp/r834logic R834Original795Harness | tee /tmp/R834-HARNESS-REPORT.txt
+          grep -q 'R8.3.4 ORIGINAL 795 PASS total=795' /tmp/R834-HARNESS-REPORT.txt
+          grep -q 'ruleset=898' /tmp/R834-HARNESS-REPORT.txt
+
+      - name: Set Android identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -i "s/namespace 'com.vhanma.hanmacombocalleromega833'/namespace 'com.vhanma.hanmacombocalleromega834'/" /tmp/r834proj/app/build.gradle
+          sed -i "s/applicationId 'com.vhanma.hanmacombocalleromega833'/applicationId 'com.vhanma.hanmacombocalleromega834'/" /tmp/r834proj/app/build.gradle
+          sed -i "s/versionCode [0-9][0-9]*/versionCode 834/" /tmp/r834proj/app/build.gradle
+          sed -i "s/versionName '[^']*'/versionName '8.3.4-Omega-Original-795'/" /tmp/r834proj/app/build.gradle
+          sed -i 's/android:label="[^"]*"/android:label="Hanma Combo Caller R8.3.4 Ω"/' /tmp/r834proj/app/src/main/AndroidManifest.xml
+          grep -q "namespace 'com.vhanma.hanmacombocalleromega834'" /tmp/r834proj/app/build.gradle
+          grep -q "applicationId 'com.vhanma.hanmacombocalleromega834'" /tmp/r834proj/app/build.gradle
+
+      - name: Build Android release
+        shell: bash
+        run: |
+          set -o pipefail
+          cd /tmp/r834proj
+          chmod +x gradlew
+          ./gradlew --no-daemon clean assembleRelease 2>&1 | tee /tmp/r834-build.log
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-r834-original-795-failure
+          path: |
+            /tmp/r834-build.log
+            /tmp/R834-HARNESS-REPORT.txt
+            /tmp/R834-SOURCE-SHA256.txt
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Verify APK contains the exact 795 corpus
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APK=dist/Hanma-Combo-Caller-R8.3.4-Omega-Original-795.apk
+          cp /tmp/r834proj/app/build/outputs/apk/release/app-release.apk "$APK"
+          BT="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BT/apksigner" verify --verbose --print-certs "$APK" | tee dist/APK-SIGNATURE-REPORT.txt
+          "$BT/aapt" dump badging "$APK" | tee dist/APK-BADGING-REPORT.txt
+          grep -q "package: name='com.vhanma.hanmacombocalleromega834'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionCode='834'" dist/APK-BADGING-REPORT.txt
+          grep -q "versionName='8.3.4-Omega-Original-795'" dist/APK-BADGING-REPORT.txt
+          grep -q "application-label:'Hanma Combo Caller R8.3.4 Ω'" dist/APK-BADGING-REPORT.txt
+          if grep -q 'uses-permission:' dist/APK-BADGING-REPORT.txt; then echo 'Unexpected runtime permission'; exit 1; fi
+          unzip -t "$APK" | tail -1 | tee dist/APK-ARCHIVE-REPORT.txt
+          unzip -l "$APK" | grep -q 'assets/combos_codes.txt'
+          unzip -l "$APK" | grep -q 'assets/combos_named.txt'
+          unzip -l "$APK" | grep -q 'assets/mycombat_original_795.txt'
+          unzip -p "$APK" assets/mycombat_original_795.txt > /tmp/apk-mycombat-795.txt
+          echo '627d1aef21af981e175e4a361919e72aaeea7533ebe5de44eab661be9d26b1e5  /tmp/apk-mycombat-795.txt' | sha256sum -c -
+          sha256sum "$APK" > dist/Hanma-Combo-Caller-R8.3.4-Omega-Original-795-SHA256.txt
+          cp /tmp/R834-HARNESS-REPORT.txt /tmp/R834-SOURCE-SHA256.txt dist/
+          cat > dist/BUILD-REPORT.txt <<'REPORT'
+          HANMA COMBO CALLER R8.3.4 OMEGA + ORIGINAL 795
+          Package: com.vhanma.hanmacombocalleromega834
+          Version: 8.3.4-Omega-Original-795 / 834
+          Runtime permissions: none
+          Added untouched MyCombat 1.0.0 recovered predefined database: 795 records.
+          Original groups: Boxing 100, Kickboxing 100, Muay Thai 95, MMA 100, Combat Sambo 100, BJJ 150, Wrestling 100, Judo 50.
+          New mode: MyCombat Originals (795), with its own style selector.
+          Original calls are emitted verbatim with no Omega edits, no added defenses and no limb normalization.
+          Existing R8.3.3 Hanma Ruleset 898 library, Source Locked 136 corpus, Adaptive brain, Rapid Call, 1x-5x repetitions, Branching Spar and Ghost Replay remain.
+          REPORT
+          (cd /tmp/r834proj && zip -qr "$GITHUB_WORKSPACE/dist/Hanma-Combo-Caller-R8.3.4-Omega-Original-795-Source.zip" . -x 'app/build/*' '.gradle/*' 'build/*')
+          zip -j dist/Hanma-Combo-Caller-R8.3.4-Omega-Original-795-Source.zip /tmp/combo-caller/app/src/main/assets/combos_codes.txt /tmp/combo-caller/app/src/main/assets/combos_named.txt /tmp/combo-caller/app/src/main/assets/mycombat_original_795.txt
+          (cd dist && zip -q Hanma-Combo-Caller-R8.3.4-Omega-Original-795-Package.zip Hanma-Combo-Caller-R8.3.4-Omega-Original-795.apk Hanma-Combo-Caller-R8.3.4-Omega-Original-795-Source.zip Hanma-Combo-Caller-R8.3.4-Omega-Original-795-SHA256.txt APK-SIGNATURE-REPORT.txt APK-BADGING-REPORT.txt APK-ARCHIVE-REPORT.txt BUILD-REPORT.txt R834-HARNESS-REPORT.txt R834-SOURCE-SHA256.txt)
+
+      - name: Upload final package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-combo-caller-r834-original-795-final
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Publish R8.3.4 release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG=hanma-combo-r834-original-795
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/* --clobber
+          else
+            gh release create "$TAG" dist/* --target "$GITHUB_SHA" --title 'Hanma Combo Caller R8.3.4 Ω + Original 795' --notes 'Adds all 795 recovered MyCombat 1.0.0 predefined combos verbatim in a dedicated Originals mode with original style groups. Existing R8.3.3 systems remain.'
+          fi
