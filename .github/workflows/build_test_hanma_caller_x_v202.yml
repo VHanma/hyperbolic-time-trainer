@@ -1,0 +1,133 @@
+name: Build and Test Hanma Combo Caller X v2.0.2
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ hanma-arsenal-v2 ]
+    paths:
+      - 'tools/hotfix_hanma_caller_x_v202.py'
+      - '.github/workflows/build_test_hanma_caller_x_v202.yml'
+  pull_request:
+    branches: [ master ]
+    paths:
+      - 'tools/hotfix_hanma_caller_x_v202.py'
+      - '.github/workflows/build_test_hanma_caller_x_v202.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-runtime-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Rehydrate and patch Android project
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat hanma-caller-x/payload.part* > /tmp/hanma-caller-x.b64
+          base64 --decode /tmp/hanma-caller-x.b64 > /tmp/hanma-caller-x.tgz
+          tar -xzf /tmp/hanma-caller-x.tgz -C hanma-caller-x
+          python tools/hotfix_hanma_caller_x_v201.py
+          python tools/hotfix_hanma_caller_x_v202.py
+          JAVA=hanma-caller-x/app/src/main/java/com/vhanma/hanmacallerx/MainActivity.java
+          grep -q 'showBootstrapScreen();' "$JAVA"
+          grep -q 'showStartupFailure(Throwable error)' "$JAVA"
+          grep -q 'Starting the offline voice engine' "$JAVA"
+          ! grep -q 'handler.post(this::initTtsSafely)' "$JAVA"
+          grep -q "versionCode 22" hanma-caller-x/app/build.gradle
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Build signed release APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 -o /tmp/gradle.zip https://services.gradle.org/distributions/gradle-8.2-bin.zip
+          unzip -q /tmp/gradle.zip -d /tmp/gradle-dist
+          cd hanma-caller-x
+          /tmp/gradle-dist/gradle-8.2/bin/gradle wrapper --gradle-version 8.2
+          chmod +x gradlew
+          ./gradlew --no-daemon clean assembleRelease
+
+      - name: Launch and keep alive on Android 16 emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 36
+          target: google_apis
+          arch: x86_64
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            set -euo pipefail
+            APK=hanma-caller-x/app/build/outputs/apk/release/app-release.apk
+            PKG=com.vhanma.hanmacallerx
+            adb install -r "$APK"
+            adb shell am force-stop "$PKG"
+            adb logcat -c
+            adb shell am start -W -n "$PKG/.MainActivity" | tee /tmp/am-start-v202.txt
+            sleep 15
+            adb logcat -d > /tmp/hanma-v202-logcat.txt
+            adb shell pidof "$PKG" | tee /tmp/hanma-v202-pid.txt
+            test -s /tmp/hanma-v202-pid.txt
+            adb shell uiautomator dump /sdcard/hanma-v202-window.xml
+            adb pull /sdcard/hanma-v202-window.xml /tmp/hanma-v202-window.xml
+            grep -q 'HANMA COMBO CALLER X' /tmp/hanma-v202-window.xml
+            grep -q '2,198 CALLABLE DRILLS' /tmp/hanma-v202-window.xml
+            if grep -q 'FATAL EXCEPTION.*com.vhanma.hanmacallerx' /tmp/hanma-v202-logcat.txt; then
+              echo 'Fatal exception found in runtime log'
+              exit 1
+            fi
+
+      - name: Verify and package tested APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist-v202
+          APK=dist-v202/Hanma-Combo-Caller-X-v2.0.2-ANDROID16-TESTED.apk
+          cp hanma-caller-x/app/build/outputs/apk/release/app-release.apk "$APK"
+          BUILD_TOOLS="$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d | sort -V | tail -1)"
+          "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$APK" > dist-v202/APK-SIGNATURE-REPORT.txt
+          "$BUILD_TOOLS/aapt" dump badging "$APK" > dist-v202/APK-BADGING-REPORT.txt
+          grep -q "versionCode='22'" dist-v202/APK-BADGING-REPORT.txt
+          unzip -t "$APK" > dist-v202/APK-ARCHIVE-REPORT.txt
+          sha256sum "$APK" > dist-v202/Hanma-Combo-Caller-X-v2.0.2-SHA256.txt
+          cp /tmp/am-start-v202.txt /tmp/hanma-v202-logcat.txt /tmp/hanma-v202-pid.txt /tmp/hanma-v202-window.xml dist-v202/
+          cat > dist-v202/RUNTIME-TEST-REPORT.txt <<'REPORT'
+          HANMA COMBO CALLER X v2.0.2
+          Runtime target: Android 16 / API 36 emulator
+          Launch command: passed
+          Process alive after 15 seconds: passed
+          Main screen found in UI hierarchy: passed
+          2,198 drill label found: passed
+          Fatal exception check: passed
+          TTS startup: lazy, only after voice is requested
+          REPORT
+
+      - name: Upload tested package
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-combo-caller-x-v202-android16-tested
+          path: dist-v202/*
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload failure evidence
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: hanma-v202-failure-evidence
+          path: |
+            /tmp/am-start-v202.txt
+            /tmp/hanma-v202-logcat.txt
+            /tmp/hanma-v202-pid.txt
+            /tmp/hanma-v202-window.xml
+          if-no-files-found: warn
+          retention-days: 14
