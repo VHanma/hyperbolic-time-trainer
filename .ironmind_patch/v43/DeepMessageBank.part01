@@ -1,0 +1,44 @@
+ "burst settle restore", "LUNG");
+        add(CAT_CONDITIONING, "EXPLODE CLEAN", "Fire hard for the useful moment, then release unnecessary tension.", "Alactic power depends on sharp output and real recovery.", "fire relax reload", "SPARK");
+        add(CAT_CONDITIONING, "BUILD PEAK UNLOAD", "Capacity first. Intensity next. Peak the weapon, then let it sharpen.", "Progression works through accumulation, realization and deloading.", "build sharpen reveal", "MOUNTAIN");
+        add(CAT_CONDITIONING, "RECOVERY MAKES SPEED", "Today’s recovery is part of tomorrow’s power.", "Sleep, food and lower-intensity work preserve adaptation.", "restore adapt express", "MOON");
+
+        add(CAT_MENTAL, "QUIET EYES", "Let the scene come to you. Do not chase every twitch.", "Broad calm attention reduces wasted reactions.", "quiet wide present", "EYE");
+        add(CAT_MENTAL, "LOOSE JAW", "Release the jaw, shoulders and hands. Read first, then fire.", "Lower unnecessary tension preserves speed and decision quality.", "loose see move", "WAVE");
+        add(CAT_MENTAL, "FIRST USEFUL TASK", "Pressure shrinks when you perform the first useful action.", "Return attention to stance, breath, target and next decision.", "one task now", "ONE");
+        add(CAT_MENTAL, "FEAR IS DATA", "Notice the signal, name the problem, and choose the tactical answer.", "Arousal becomes useful when it points toward action.", "feel read solve", "FIRE");
+        add(CAT_MENTAL, "CALMER AS IT HARDENS", "The harder the exchange becomes, the simpler your attention gets.", "Pressure narrows focus to trained cues and immediate structure.", "harder quieter clearer", "ICE");
+        add(CAT_MENTAL, "TRUST EARNED PATTERNS", "Let practice carry the familiar moment. Keep thinking available for what changes.", "Automatic chunks free attention for adaptation.", "recognize flow adapt", "CHAIN");
+    }
+
+    private void add(String category, String reflex, String coach, String whisper, String texture, String symbol) {
+        messages.add(new Message(category, reflex, coach, whisper, texture, symbol));
+    }
+
+    public List<String> categories() {
+        return Arrays.asList(CAT_MIXED, CAT_POWER, CAT_DEFENSE, CAT_TIMING, CAT_FOOTWORK,
+                CAT_PRESSURE, CAT_MMA, CAT_CONDITIONING, CAT_MENTAL);
+    }
+
+    public Message random(String category) {
+        List<Message> pool = new ArrayList<>();
+        for (Message m : messages) {
+            if (category == null || CAT_MIXED.equals(category) || m.category.equals(category)) pool.add(m);
+        }
+        if (pool.isEmpty()) pool.addAll(messages);
+        return pool.get(random.nextInt(pool.size()));
+    }
+
+    public int size() { return messages.size(); }
+
+    public static String reverseWords(String input) {
+        if (input == null) return "";
+        String[] words = input.trim().split("\\s+");
+        StringBuilder out = new StringBuilder();
+        for (int i = words.length - 1; i >= 0; i--) {
+            if (out.length() > 0) out.append(' ');
+            out.append(words[i]);
+        }
+        return out.toString().toLowerCase(Locale.US);
+    }
+}

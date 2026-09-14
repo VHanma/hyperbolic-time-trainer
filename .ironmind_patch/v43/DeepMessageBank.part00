@@ -1,0 +1,88 @@
+package com.htt;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import java.util.Random;
+
+/** Multi-form combat messages for conscious coaching, quiet reinforcement and brief visual cues. */
+public final class DeepMessageBank {
+    public static final String CAT_MIXED = "Mixed combat intelligence";
+    public static final String CAT_POWER = "Power mechanics";
+    public static final String CAT_DEFENSE = "Defense + counters";
+    public static final String CAT_TIMING = "Timing + perception";
+    public static final String CAT_FOOTWORK = "Footwork + angles";
+    public static final String CAT_PRESSURE = "Pressure + tactics";
+    public static final String CAT_MMA = "MMA transitions";
+    public static final String CAT_CONDITIONING = "Conditioning + recovery";
+    public static final String CAT_MENTAL = "Mental state";
+
+    public static final class Message {
+        public final String category;
+        public final String reflex;
+        public final String coach;
+        public final String whisper;
+        public final String texture;
+        public final String symbol;
+
+        Message(String category, String reflex, String coach, String whisper, String texture, String symbol) {
+            this.category = category;
+            this.reflex = reflex;
+            this.coach = coach;
+            this.whisper = whisper;
+            this.texture = texture;
+            this.symbol = symbol;
+        }
+    }
+
+    private final List<Message> messages = new ArrayList<>();
+    private final Random random = new Random();
+
+    public DeepMessageBank() {
+        add(CAT_POWER, "HIP FIRST", "Let the floor start it. The hip moves, then the hand arrives.", "Ground pressure rises through the chain while the arm stays loose.", "floor hip through return", "SPIRAL");
+        add(CAT_POWER, "LOOSE THEN SOLID", "Stay liquid on the way in. Become one piece only at contact.", "Relaxation preserves speed and brief contact stiffness transfers it.", "loose fast connected", "WAVE");
+        add(CAT_POWER, "BODY BEFORE HAND", "Move the body first and let the fist ride the acceleration.", "The arm leaves late, aligned behind the body mass.", "body leads hand follows", "ARROW");
+        add(CAT_POWER, "DRIVE THE FLOOR", "Push the floor behind you and send the target away.", "Foot pressure, hip extension and torso rotation arrive in sequence.", "floor drive target", "ROOT");
+        add(CAT_POWER, "RETURN LOADED", "Do not admire the shot. Bring it home already loaded for the next one.", "Recovery protects the chin and prepares the following weapon.", "land return reload", "LOOP");
+        add(CAT_POWER, "COMPACT ARC", "Turn the hook from the floor. Keep the arm inside the body’s rotation.", "The hip creates the arc and the base survives the impact.", "turn compact connect", "CIRCLE");
+        add(CAT_POWER, "RISE THROUGH CENTER", "Load beneath the target and let the uppercut rise through a short lane.", "Knees and hips release force through a protected vertical path.", "load rise center", "UP");
+
+        add(CAT_DEFENSE, "CLEAR AND ANSWER", "Move only far enough to clear the line, then answer before he resets.", "Defense and counterfire belong to the same beat.", "clear load answer", "SPLIT");
+        add(CAT_DEFENSE, "HEAD OFF LINE", "Take the head away without abandoning the stance.", "The base stays loaded while the head clears the weapon.", "off line still loaded", "DIAGONAL");
+        add(CAT_DEFENSE, "GUARD HOME", "Your hand lands, then it races home before the return arrives.", "Fast guard recovery closes the opponent’s counter lane.", "land home ready", "SHIELD");
+        add(CAT_DEFENSE, "PARRY OPENS", "Redirect the strike by inches and use the lane it gives you.", "A small parry creates a direct counter path.", "redirect open answer", "GATE");
+        add(CAT_DEFENSE, "ROLL INTO POSITION", "Travel under the hook with your knees and hips, then rise where your hands work.", "The roll is a position change, not an empty dip.", "under around return", "ARC");
+        add(CAT_DEFENSE, "PULL WITHIN RANGE", "Make the punch miss by inches. Stay close enough to punish it.", "The rear leg supports the pull and the counter stays available.", "miss close punish", "TETHER");
+        add(CAT_DEFENSE, "READ THE SECOND", "The first attack gives information. The second one reveals the pattern.", "Recognize the repeat, then intercept the recovery.", "first reads second answers", "EYE");
+
+        add(CAT_TIMING, "STRIKE THE ADJUSTMENT", "Hit while his feet or guard are still reorganizing.", "Movement steals tempo because realignment costs time.", "adjustment is opening", "CLOCK");
+        add(CAT_TIMING, "BREAK THE BEAT", "Give him a rhythm, let him settle into it, then remove it.", "Familiar timing creates expectation; broken timing creates delay.", "set break own", "PULSE");
+        add(CAT_TIMING, "SEE THE CHEST", "Keep the eyes quiet on the chest and hips. The limbs will announce themselves around it.", "Broad visual attention catches initiation before full speed.", "quiet eyes early read", "EYE");
+        add(CAT_TIMING, "TOUCH AND READ", "Use the jab to ask a question before you spend the heavy shot.", "Low-cost contact reveals guard reactions, balance and preferred counters.", "touch read confirm", "PROBE");
+        add(CAT_TIMING, "WEIGHT SETTLES", "When his weight commits, take the beat before he can reload.", "Committed weight narrows immediate options and creates a timing window.", "settle strike reset", "ANCHOR");
+        add(CAT_TIMING, "STILLNESS THREATENS", "You do not need to move constantly. Stay ready enough that stillness carries danger.", "Available balance makes small motion meaningful.", "quiet ready sudden", "POINT");
+
+        add(CAT_FOOTWORK, "CUT DIAGONAL", "Do not follow him around the ring. Cut across the space he needs.", "Diagonal pressure shortens escape routes while preserving balance.", "cut space own lane", "X");
+        add(CAT_FOOTWORK, "PIVOT AND DENY", "Turn into your lane while closing his return lane.", "A useful pivot improves your weapon alignment and worsens his.", "turn open close", "COMPASS");
+        add(CAT_FOOTWORK, "FEET PLACE WEAPONS", "Move because the step gives your hands or kicks a better job.", "Footwork is positioning, not decoration.", "step places weapon", "FOOT");
+        add(CAT_FOOTWORK, "WEIGHT AVAILABLE", "Finish every step with enough weight left to choose again.", "Balanced transitions preserve offense, defense and direction changes.", "arrive ready choose", "BALANCE");
+        add(CAT_FOOTWORK, "SMALL STEPS TAKE SPACE", "Pressure with compact steps. Make every inch permanent.", "Short steps reduce overcommitment and keep the stance connected.", "small step permanent space", "STAIR");
+        add(CAT_FOOTWORK, "ANGLE AFTER IMPACT", "The combination is not finished until your position is useful.", "Exit or continue from an angle that limits the return.", "land turn deny", "CORNER");
+
+        add(CAT_PRESSURE, "PRESSURE WITH EYES", "Make him react before you spend energy. Pressure begins with information.", "Feints, steps and touches create input work without reckless output.", "see draw close", "HUNT");
+        add(CAT_PRESSURE, "BODY OPENS HEAD", "Bring the elbows down, then punish what rises.", "Level changes and body attacks reorganize the guard.", "body lowers head opens", "LEVEL");
+        add(CAT_PRESSURE, "SAVE THE FULL SHOT", "Use light and medium contact to build the opening. Spend full power when it is confirmed.", "Economical volume preserves speed and increases tactical pressure.", "touch build confirm", "RESERVE");
+        add(CAT_PRESSURE, "COUNTER THE HABIT", "Do not only counter the punch. Counter what he always does after it.", "Repeated defensive habits create predictable second openings.", "attack reaction after", "TRAP");
+        add(CAT_PRESSURE, "NO EMPTY EXCHANGES", "Every exchange should win position, information or damage.", "A combination earns its ending through balance and placement.", "touch learn land position", "CHAIN");
+        add(CAT_PRESSURE, "YOUR TURN CONTINUES", "There are no polite turns. Defend while preparing the next action.", "Countering converts the opponent’s initiative into your sequence.", "defend answer continue", "INFINITY");
+
+        add(CAT_MMA, "RANGES CONNECT", "Let the hands create the entry and let the entry create the hands.", "Striking, clinch and takedown threats should feed one another.", "strike level clinch", "BRIDGE");
+        add(CAT_MMA, "FRAME BECOMES LANE", "Use the frame to make space, then let the strike travel through it.", "Frames manage posture while opening short punches and elbows.", "frame turn strike", "FRAME");
+        add(CAT_MMA, "SPRAWL TO OFFENSE", "Do not stop at surviving the shot. Turn the sprawl into control or punishment.", "Defensive wrestling should end with position and counterattack.", "sprawl circle control", "DOWN");
+        add(CAT_MMA, "LEVEL CHANGE HIDES HANDS", "Show the hips a threat, then let the hands arrive through the hesitation.", "Wrestling threats alter guard height and stance reaction.", "level freeze strike", "DROP");
+        add(CAT_MMA, "CLINCH TURN ANGLE", "Turn the body, move the head, and make the break belong to you.", "Clinch position can become a striking angle instead of a neutral reset.", "tie turn release", "KNOT");
+        add(CAT_MMA, "SCRAMBLE TO CONTROL", "Move through the chaos with one destination: top position or a clean escape.", "Transitions stay connected when the next control is chosen early.", "move settle control", "KNOT");
+
+        add(CAT_CONDITIONING, "MECHANICS SURVIVE", "Fatigue is allowed. Broken structure is not.", "Simplify the task and preserve alignment as effort rises.", "breathe structure continue", "ENGINE");
+        add(CAT_CONDITIONING, "RECOVER BETWEEN BURSTS", "Let the breath and feet restore you while the eyes keep working.", "Aerobic recovery supports repeated explosive exchanges.",

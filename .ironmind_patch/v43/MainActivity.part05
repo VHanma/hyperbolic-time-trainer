@@ -1,0 +1,55 @@
+HORIZONTAL);
+        l.setGravity(Gravity.CENTER_VERTICAL);
+        return l;
+    }
+
+    private SeekBar seek(int progress, int min, int max) {
+        SeekBar s = new SeekBar(this);
+        s.setMax(max);
+        if (android.os.Build.VERSION.SDK_INT >= 26) s.setMin(min);
+        s.setProgress(progress);
+        return s;
+    }
+
+    private SeekBar.OnSeekBarChangeListener simpleSeek(IntConsumer consumer) {
+        return new SeekBar.OnSeekBarChangeListener() {
+            @Override public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) { consumer.accept(progress); }
+            @Override public void onStartTrackingTouch(SeekBar seekBar) { }
+            @Override public void onStopTrackingTouch(SeekBar seekBar) { }
+        };
+    }
+
+    private EditText numberInput(String value, String hint) {
+        EditText e = new EditText(this);
+        e.setText(value); e.setHint(hint); e.setTextColor(Color.WHITE); e.setHintTextColor(0xFF7F8994);
+        e.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        return e;
+    }
+    private EditText decimalInput(String value, String hint) { return numberInput(value, hint); }
+
+    private GradientDrawable round(int fill, int radiusDp, int stroke) {
+        GradientDrawable d = new GradientDrawable();
+        d.setColor(fill); d.setCornerRadius(dp(radiusDp)); d.setStroke(dp(1), stroke);
+        return d;
+    }
+
+    private FrameLayout.LayoutParams match() { return new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT); }
+    private LinearLayout.LayoutParams fullWrap(int topDp) {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        p.topMargin = dp(topDp); return p;
+    }
+    private LinearLayout.LayoutParams weight() {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f);
+        p.setMargins(dp(3), 0, dp(3), 0); return p;
+    }
+    private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
+
+    private static int parseLeadingInt(String s, int fallback) {
+        try { return Integer.parseInt(s.trim().split(" ")[0]); } catch (Exception e) { return fallback; }
+    }
+    private static double parseLeadingDouble(String s, double fallback) {
+        try { return Double.parseDouble(s.trim().split(" ")[0]); } catch (Exception e) { return fallback; }
+    }
+
+    private interface IntConsumer { void accept(int value); }
+}

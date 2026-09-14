@@ -1,0 +1,116 @@
+package com.htt;
+
+import android.content.Context;
+import android.os.Bundle;
+import android.speech.tts.TextToSpeech;
+import android.speech.tts.Voice;
+
+import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+/** Three independent TTS streams: natural coach, quiet reinforcement and fast texture. */
+public final class SpeechEngine {
+    private TextToSpeech coach;
+    private TextToSpeech whisper;
+    private TextToSpeech texture;
+    private final AtomicBoolean coachReady = new AtomicBoolean(false);
+    private final AtomicBoolean whisperReady = new AtomicBoolean(false);
+    private final AtomicBoolean textureReady = new AtomicBoolean(false);
+    private float coachVolume = 0.92f;
+    private float whisperVolume = 0.13f;
+    private float textureVolume = 0.045f;
+
+    public SpeechEngine(Context context) {
+        Context app = context.getApplicationContext();
+        coach = new TextToSpeech(app, status -> {
+            if (status == TextToSpeech.SUCCESS && coach != null) {
+                configure(coach, 0.93f, 0.94f);
+                coachReady.set(true);
+            }
+        });
+        whisper = new TextToSpeech(app, status -> {
+            if (status == TextToSpeech.SUCCESS && whisper != null) {
+                configure(whisper, 1.02f, 0.86f);
+                whisperReady.set(true);
+            }
+        });
+        texture = new TextToSpeech(app, status -> {
+            if (status == TextToSpeech.SUCCESS && texture != null) {
+                configure(texture, 1.72f, 0.72f);
+                textureReady.set(true);
+            }
+        });
+    }
+
+    private void configure(TextToSpeech tts, float rate, float pitch) {
+        tts.setLanguage(Locale.US);
+        selectBestOfflineVoice(tts);
+        tts.setSpeechRate(rate);
+        tts.setPitch(pitch);
+    }
+
+    private void selectBestOfflineVoice(TextToSpeech tts) {
+        try {
+            Set<Voice> voices = tts.getVoices();
+            Voice best = null;
+            if (voices != null) {
+                for (Voice voice : voices) {
+                    if (voice == null || voice.getLocale() == null) continue;
+                    if (!"en".equalsIgnoreCase(voice.getLocale().getLanguage())) continue;
+                    if (voice.isNetworkConnectionRequired()) continue;
+                    if (best == null || voice.getQuality() > best.getQuality() ||
+                            (voice.getQuality() == best.getQuality() && voice.getLatency() < best.getLatency())) {
+                        best = voice;
+                    }
+                }
+            }
+            if (best != null) tts.setVoice(best);
+        } catch (Exception ignored) { }
+    }
+
+    public void setCoachVolume(float value) { coachVolume = clamp(value); }
+    public void setWhisperVolume(float value) { whisperVolume = clamp(value); }
+    public void setTextureVolume(float value) { textureVolume = clamp(value); }
+
+    public void speakCoach(String text) { speakCoach(text, 0f); }
+    public void speakCoach(String text, float pan) {
+        speak(coach, coachReady, text, coachVolume, pan, TextToSpeech.QUEUE_FLUSH, "coach_");
+    }
+
+    public void speakWhisper(String text) { speakWhisper(text, 0f); }
+    public void speakWhisper(String text, float pan) {
+        speak(whisper, whisperReady, text, whisperVolume, pan, TextToSpeech.QUEUE_FLUSH, "whisper_");
+    }
+
+    public void speakTexture(String text, float pan) {
+        speak(texture, textureReady, text, textureVolume, pan, TextToSpeech.QUEUE_FLUSH, "texture_");
+    }
+
+    private void speak(TextToSpeech engine, AtomicBoolean ready, String text, float volume,
+                       float pan, int queueMode, String idPrefix) {
+        if (!ready.get() || engine == null || text == null || text.trim().isEmpty()) return;
+        Bundle b = new Bundle();
+        b.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, clamp(volume));
+        b.putFloat(TextToSpeech.Engine.KEY_PARAM_PAN, Math.max(-1f, Math.min(1f, pan)));
+        engine.speak(text, queueMode, b, idPrefix + System.nanoTime());
+    }
+
+    public void stop() {
+        if (coach != null) coach.stop();
+        if (whisper != null) whisper.stop();
+        if (texture != null) texture.stop();
+    }
+
+    public void shutdown() {
+        stop();
+        if (coach != null) coach.shutdown();
+        if (whisper != null) whisper.shutdown();
+        if (texture != null) texture.shutdown();
+        coach = null;
+        whisper = null;
+        texture = null;
+    }
+
+    private static float clamp(float v) { return Math.max(0f, Math.min(1f, v)); }
+}

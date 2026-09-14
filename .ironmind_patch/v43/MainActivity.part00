@@ -1,0 +1,232 @@
+package com.htt;
+
+import android.Manifest;
+import android.app.AlertDialog;
+import android.content.Context;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
+import android.os.Bundle;
+import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
+import android.text.InputType;
+import android.view.Gravity;
+import android.util.Size;
+import android.view.View;
+import android.view.WindowManager;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.CheckBox;
+import android.widget.EditText;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.SeekBar;
+import android.widget.Spinner;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageProxy;
+import androidx.camera.core.Preview;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.camera.view.PreviewView;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+import com.google.common.util.concurrent.ListenableFuture;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.pose.PoseDetection;
+import com.google.mlkit.vision.pose.PoseDetector;
+import com.google.mlkit.vision.pose.defaults.PoseDetectorOptions;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import java.util.Random;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * IRON MIND V4: Hyperbolic Fight Chamber.
+ * Offline combo coach, passive embedding lab, stroboscopic occlusion and camera strike analysis.
+ */
+public final class MainActivity extends AppCompatActivity {
+    private static final int CAMERA_PERMISSION = 401;
+    private static final int MODE_HOME = 0;
+    private static final int MODE_PASSIVE = 1;
+    private static final int MODE_COMBO = 2;
+    private static final int MODE_VISION = 3;
+    private static final int MODE_FUSION = 4;
+    private static final int MODE_REPORT = 5;
+
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final ExecutorService cameraExecutor = Executors.newSingleThreadExecutor();
+    private FrameLayout root;
+    private ComboBank bank;
+    private DeepMessageBank deepMessages;
+    private DeepEmbedView deepEmbedView;
+    private SpeechEngine speech;
+    private ToneEngine tones;
+    private TorchPulseEngine torch;
+    private SharedPreferences prefs;
+    private StrobeView strobeView;
+    private int currentMode = MODE_HOME;
+
+    private ProcessCameraProvider cameraProvider;
+    private PreviewView previewView;
+    private HudView hudView;
+    private PoseDetector poseDetector;
+    private StrikeTracker strikeTracker;
+    private StrikeDatabase strikeDb;
+    private int lensFacing = CameraSelector.LENS_FACING_FRONT;
+
+    private long sessionStartedMs;
+    private long sessionEndsMs;
+    private int combosCalled;
+    private int combosCompleted;
+    private ComboBank.Combo currentCombo;
+    private int expectedIndex;
+    private int comboRepeatIndex;
+    private int comboRepetitions = 5;
+    private boolean currentRepetitionCompleted;
+    private TextView sessionClock;
+    private TextView comboText;
+    private String activeCategory = ComboBank.CAT_MIXED;
+    private long callIntervalMs = 5000;
+    private boolean whisperEnabled = true;
+    private final List<String> passiveLog = new ArrayList<>();
+    private final Random passiveRandom = new Random();
+    private TextView passiveCueText;
+    private String passiveMode = "Deep Embed";
+    private String passiveCategory = DeepMessageBank.CAT_MIXED;
+    private String passiveVisualDelivery = "Masked + pattern";
+    private boolean passiveCoachEnabled = true;
+    private boolean passiveWhisperEnabled = true;
+    private boolean passiveTextureEnabled = true;
+    private boolean passiveReverseTexture;
+    private boolean passiveHapticEnabled = true;
+    private boolean passiveGoldenTiming = true;
+    private boolean passiveRevealAtEnd = true;
+    private int passiveCueDurationMs = 67;
+    private int passiveBaseIntervalMs = 6500;
+    private int passiveCycle;
+    private boolean fusionRunning;
+    private String lastTrackingStatus = "";
+    private String lastLiveReadout = "";
+
+    private final String[] visualProfiles = {
+            "Off",
+            "Breathing pulse 0.1Hz",
+            "Temporal 4Hz low contrast",
+            "Occlusion 10Hz / 70% open",
+            "Occlusion 8Hz / 60% open",
+            "Occlusion 7Hz / 55% open",
+            "Occlusion 5Hz / 50% open",
+            "Peripheral 8Hz small field"
+    };
+
+    private final String[] audioProfiles = {
+            "Off",
+            "10 Hz binaural focus",
+            "15 Hz binaural active",
+            "6 Hz binaural imagery",
+            "40 Hz amplitude lab",
+            "432 Hz + 10 Hz modulation",
+            "528 Hz + 6 Hz modulation",
+            "7.83 Hz isochronic",
+            "111 Hz + 4 Hz modulation",
+            "136.1 Hz + 7.83 Hz modulation",
+            "369 Hz + 10 Hz modulation"
+    };
+
+    @Override protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        prefs = getSharedPreferences("iron_mind_v4", MODE_PRIVATE);
+        bank = new ComboBank(this);
+        deepMessages = new DeepMessageBank();
+        speech = new SpeechEngine(this);
+        tones = new ToneEngine();
+        torch = new TorchPulseEngine(this);
+        strikeDb = new StrikeDatabase(this);
+        PoseDetectorOptions options = new PoseDetectorOptions.Builder()
+                .setDetectorMode(PoseDetectorOptions.STREAM_MODE)
+                .build();
+        poseDetector = PoseDetection.getClient(options);
+        root = new FrameLayout(this);
+        root.setBackgroundColor(0xFF05070B);
+        setContentView(root);
+        showHome();
+    }
+
+    private void showHome() {
+        stopEverything();
+        currentMode = MODE_HOME;
+        root.removeAllViews();
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout column = vertical(18);
+        column.setPadding(dp(18), dp(24), dp(18), dp(34));
+        scroll.addView(column);
+        root.addView(scroll, match());
+
+        TextView title = text("IRON MIND V4", 34, Color.WHITE, true);
+        title.setGravity(Gravity.CENTER);
+        column.addView(title, fullWrap(0));
+        TextView subtitle = text("HYPERBOLIC FIGHT CHAMBER", 20, 0xFF5DE5FF, true);
+        subtitle.setGravity(Gravity.CENTER);
+        column.addView(subtitle, fullWrap(4));
+        TextView stats = text(bank.comboCount() + " combo paths  |  " + bank.affirmationCount() + " message forms\nOffline. Personal. No accounts.", 15, 0xFFB5C0CE, false);
+        stats.setGravity(Gravity.CENTER);
+        column.addView(stats, fullWrap(14));
+
+        column.addView(modeButton("PASSIVE DEEP FORGE", "Natural coach, masked visuals, peripheral primes, three audio layers, haptics, sleep and fringe modes", () -> showPassive()), fullWrap(12));
+        column.addView(modeButton("NEMESIS COMBO COACH", "Choose how many times each combo repeats before the next one", () -> showComboCoach()), fullWrap(10));
+        column.addView(modeButton("LIVE VISION ANALYSIS", "Guard-calibrated strike states, speed range, modeled force and readable tracking status", () -> showCamera(false)), fullWrap(10));
+        column.addView(modeButton("FUSION CHAMBER", "Adjustable-repeat combo caller + quiet cues + strobe + live analysis", () -> showCamera(true)), fullWrap(10));
+        column.addView(modeButton("CALIBRATION", "Body weight, shoulder width, stance and personal scaling", this::showCalibration), fullWrap(10));
+        column.addView(modeButton("RESEARCH + SESSION REPORT", "Measured density, model limits, scientific and experimental layers", this::showReport), fullWrap(10));
+
+        TextView footer = text("The chamber increases useful training density. It does not create literal extra time, directly measure impact force, or install unpracticed techniques.", 13, 0xFF7F8A96, false);
+        footer.setGravity(Gravity.CENTER);
+        column.addView(footer, fullWrap(22));
+    }
+
+    private void showPassive() {
+        stopEverything();
+        currentMode = MODE_PASSIVE;
+        root.removeAllViews();
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        strobeView = new StrobeView(this);
+        root.addView(strobeView, match());
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout panel = vertical(10);
+        panel.setPadding(dp(16), dp(18), dp(16), dp(36));
+        scroll.addView(panel);
+        root.addView(scroll, match());
+        addHeader(panel, "PASSIVE DEEP FORGE", "Multiple layers work together. You control what is clear, quiet, brief, peripheral, symbolic or experimental.");
+
+        Spinner mode = spinner(new String[]{
+                "Natural Coach", "Deep Embed", "Visual Threshold Lab", "Peripheral Symbol",
+                "Sleep Consolidation", "Fringe Laboratory"
+        });
+        mode.setSelection(1);
+        Spinner category = spinner(deepMessages.categories().toArray(new String[0]));
+        Spinner visualDelivery = spinner(new String[]{
+                "Visible card", "Glimpsed + mask", "Borderline + mask", "Masked + pattern",
+                "Peripheral prime", "Low contrast texture", "Symbol only"
+        });
+        visualDelivery.setSelection(3);
+        Spinner ambientVisual = spinner(visualProfiles);
+        Spinner audio = spinner(audioP

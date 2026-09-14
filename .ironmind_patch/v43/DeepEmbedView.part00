@@ -1,0 +1,153 @@
+package com.htt;
+
+import android.content.Context;
+import android.graphics.Canvas;
+import android.graphics.Color;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.Typeface;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.AttributeSet;
+import android.view.View;
+
+import java.util.Locale;
+import java.util.Random;
+
+/** Brief visual cue, peripheral prime, symbol and pattern-mask renderer. */
+public final class DeepEmbedView extends View {
+    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Random random = new Random();
+    private String cue = "";
+    private String symbol = "";
+    private String delivery = "Visible card";
+    private boolean active;
+    private boolean mask;
+    private float cueX = 0.5f;
+    private float cueY = 0.5f;
+    private int cueAlpha = 255;
+
+    public DeepEmbedView(Context context) { super(context); init(); }
+    public DeepEmbedView(Context context, AttributeSet attrs) { super(context, attrs); init(); }
+
+    private void init() {
+        setClickable(false);
+        setFocusable(false);
+        setBackgroundColor(0x44101721);
+        line.setStyle(Paint.Style.STROKE);
+        line.setStrokeWidth(2f);
+    }
+
+    public void present(String cue, String symbol, String delivery, int durationMs) {
+        handler.removeCallbacksAndMessages(null);
+        this.cue = cue == null ? "" : cue;
+        this.symbol = symbol == null ? "" : symbol;
+        this.delivery = delivery == null ? "Visible card" : delivery;
+        String lower = this.delivery.toLowerCase(Locale.US);
+        active = true;
+        mask = false;
+        cueAlpha = lower.contains("low contrast") ? 38 : 235;
+        if (lower.contains("peripheral")) {
+            int edge = random.nextInt(4);
+            cueX = edge == 0 ? 0.15f : edge == 1 ? 0.85f : 0.15f + random.nextFloat() * 0.70f;
+            cueY = edge == 2 ? 0.18f : edge == 3 ? 0.82f : 0.22f + random.nextFloat() * 0.56f;
+            cueAlpha = 120;
+        } else {
+            cueX = 0.18f + random.nextFloat() * 0.64f;
+            cueY = 0.30f + random.nextFloat() * 0.40f;
+        }
+        int showMs = Math.max(17, durationMs);
+        if (lower.contains("visible")) showMs = Math.max(900, showMs);
+        if (lower.contains("symbol only")) showMs = Math.max(500, showMs);
+        invalidate();
+        final int finalShowMs = showMs;
+        handler.postDelayed(() -> {
+            if (lower.contains("mask") || lower.contains("glimpsed") || lower.contains("borderline")) {
+                mask = true;
+                invalidate();
+                handler.postDelayed(this::clear, 260L);
+            } else {
+                clear();
+            }
+        }, finalShowMs);
+    }
+
+    public void clear() {
+        active = false;
+        mask = false;
+        cue = "";
+        invalidate();
+    }
+
+    public void stop() {
+        handler.removeCallbacksAndMessages(null);
+        clear();
+    }
+
+    @Override protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+        drawAmbientGeometry(canvas);
+        if (!active) return;
+        if (mask) {
+            drawMask(canvas);
+            return;
+        }
+        String lower = delivery.toLowerCase(Locale.US);
+        drawSymbol(canvas, symbol, getWidth() * cueX, getHeight() * cueY);
+        if (!lower.contains("symbol only")) {
+            paint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+            paint.setTextAlign(Paint.Align.CENTER);
+            paint.setTextSize(Math.max(24f, Math.min(getWidth(), getHeight()) * 0.085f));
+            paint.setColor(Color.argb(cueAlpha, 238, 248, 255));
+            paint.setShadowLayer(8f, 0f, 0f, Color.argb(Math.min(160, cueAlpha), 85, 220, 255));
+            canvas.drawText(cue, getWidth() * cueX, getHeight() * cueY, paint);
+            paint.clearShadowLayer();
+        }
+    }
+
+    private void drawAmbientGeometry(Canvas canvas) {
+        long t = System.nanoTime();
+        float pulse = (float) (0.5 + 0.5 * Math.sin(t / 1_000_000_000.0));
+        line.setColor(Color.argb((int) (18 + 18 * pulse), 80, 190, 230));
+        float cx = getWidth() / 2f;
+        float cy = getHeight() / 2f;
+        float base = Math.min(getWidth(), getHeight()) * 0.22f;
+        for (int i = 0; i < 3; i++) canvas.drawCircle(cx, cy, base * (0.55f + i * 0.34f), line);
+    }
+
+    private void drawSymbol(Canvas canvas, String name, float x, float y) {
+        int hash = name == null ? 0 : name.hashCode();
+        float r = Math.min(getWidth(), getHeight()) * 0.12f;
+        line.setStrokeWidth(3f);
+        line.setColor(Color.argb(Math.max(70, cueAlpha / 2), 94, 226, 255));
+        canvas.drawCircle(x, y - r * 0.15f, r, line);
+        int spokes = 4 + Math.abs(hash % 5);
+        for (int i = 0; i < spokes; i++) {
+            double a = 2 * Math.PI * i / spokes + (hash % 31) * 0.01;
+            canvas.drawLine(x, y - r * 0.15f,
+                    x + (float) Math.cos(a) * r,
+                    y - r * 0.15f + (float) Math.sin(a) * r, line);
+        }
+        Path p = new Path();
+        p.moveTo(x - r * 0.7f, y + r * 0.8f);
+        p.lineTo(x, y + r * 0.25f);
+        p.lineTo(x + r * 0.7f, y + r * 0.8f);
+        canvas.drawPath(p, line);
+    }
+
+    private void drawMask(Canvas canvas) {
+        paint.setStyle(Paint.Style.FILL);
+        canvas.drawColor(0xEE05070B);
+        for (int i = 0; i < 46; i++) {
+            int alpha = 40 + random.nextInt(110);
+            paint.setColor(Color.argb(alpha, 70 + random.nextInt(150), 90 + random.nextInt(150), 110 + random.nextInt(145)));
+            float left = random.nextFloat() * getWidth();
+            float top = random.nextFloat() * getHeight();
+            float width = 8 + random.nextFloat() * getWidth() * 0.22f;
+            float height = 2 + random.nextFloat() * 13f;
+            canvas.drawRect(left, top, left + width, top + height, paint);
+        }
+    }
+}

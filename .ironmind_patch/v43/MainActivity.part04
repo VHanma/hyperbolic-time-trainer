@@ -1,0 +1,203 @@
+vate void showReport() {
+        stopEverything();
+        currentMode = MODE_REPORT;
+        root.removeAllViews();
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout panel = vertical(10);
+        panel.setPadding(dp(18), dp(22), dp(18), dp(36));
+        scroll.addView(panel);
+        root.addView(scroll, match());
+        addHeader(panel, "RESEARCH + REPORT", "The app separates measured functions, models, and experimental layers.");
+
+        String report = "LAST SESSION\n" +
+                "Type: " + prefs.getString("last_type", "none") + "\n" +
+                "Real minutes: " + String.format(Locale.US, "%.1f", prefs.getFloat("last_minutes", 0f)) + "\n" +
+                "Combo repetitions called: " + prefs.getInt("last_called", 0) + "\n" +
+                "Repetitions completed: " + prefs.getInt("last_completed", 0) + "\n" +
+                "Training density: " + String.format(Locale.US, "%.2f", prefs.getFloat("last_density", 0f)) + " completed repetitions/min\n\n" +
+                "LIVE CAMERA MODEL\n" +
+                "Live Forge learns the guard first, tracks each arm through guard, extension, peak and return, and rejects incomplete motion. It uses the faster streaming pose model and a lower analysis resolution to improve processed frame rate. Speed is displayed as a sampling-aware range. Force remains a broad hypothetical impact model, not a force plate.\n\n" +
+                "VISUAL LAYERS\n" +
+                "Occlusion profiles alternate transparent and black frames to train prediction under incomplete visual information. Temporal and peripheral modes are low-contrast screen effects. Rear torch timing is approximate because phone hardware controls differ.\n\n" +
+                "AUDIO + FRINGE LAB\n" +
+                "Binaural, isochronic, 432, 528, 7.83, 111, 136.1 and 369-themed carriers are optional sound constructions. The app makes no automatic biological claim for a number. Their value can be judged by your session data, focus and retention.\n\n" +
+                "PASSIVE DEEP FORGE\n" +
+                "Natural Coach uses short conversational instructions. Deep Embed combines brief visual cues, pattern masks, quiet reinforcement, fast texture speech, stereo movement, haptic anchors and optional golden-ratio spacing. Threshold, peripheral, symbol, sleep and fringe modes remain separately selectable. Every delivered message can be revealed in the session log.\n\n" +
+                "SUBLIMINAL LAYER\n" +
+                "Brief or quiet cues reinforce already understood mechanics and tactics. Complex skill still requires physical practice.";
+        TextView body = text(report, 15, 0xFFD4DCE6, false);
+        body.setLineSpacing(0, 1.18f);
+        body.setBackground(round(0xFF0B1017, 15, 0xFF273A4B));
+        body.setPadding(dp(16), dp(16), dp(16), dp(16));
+        panel.addView(body, fullWrap(12));
+        panel.addView(actionButtonWith("BACK", this::showHome), fullWrap(14));
+    }
+
+    private void startTorchFromSelection(String selection) {
+        if (selection == null || selection.startsWith("Torch off")) return;
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            Toast.makeText(this, "Camera permission is needed for torch pulses", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        double hz = parseLeadingDouble(selection.replace("Torch pulse ", ""), 1);
+        torch.start(hz);
+    }
+
+    private void clockLoop() {
+        if (sessionClock == null || sessionEndsMs <= 0) return;
+        long left = Math.max(0, sessionEndsMs - System.currentTimeMillis());
+        sessionClock.setText(String.format(Locale.US, "%02d:%02d  |  %s",
+                left / 60_000, (left / 1000) % 60, densitySummary()));
+        if (left > 0) handler.postDelayed(this::clockLoop, 500);
+    }
+
+    private String densitySummary() {
+        if (sessionStartedMs <= 0) return "Density 0.00/min";
+        float minutes = Math.max(1f / 60f, (System.currentTimeMillis() - sessionStartedMs) / 60_000f);
+        return String.format(Locale.US, "Density %.2f/min", combosCompleted / minutes);
+    }
+
+    private void finishSession(String type) {
+        if (sessionStartedMs > 0) {
+            float minutes = Math.max(0.01f, (System.currentTimeMillis() - sessionStartedMs) / 60_000f);
+            float density = combosCompleted / minutes;
+            prefs.edit().putString("last_type", type).putFloat("last_minutes", minutes)
+                    .putInt("last_called", combosCalled).putInt("last_completed", combosCompleted)
+                    .putFloat("last_density", density).apply();
+        }
+        stopSessionOnly();
+    }
+
+    private void stopSessionOnly() {
+        handler.removeCallbacksAndMessages(null);
+        speech.stop();
+        tones.stop();
+        torch.stop();
+        if (strobeView != null) strobeView.stop();
+        if (deepEmbedView != null) deepEmbedView.stop();
+        sessionEndsMs = 0;
+        sessionStartedMs = 0;
+        currentCombo = null;
+        expectedIndex = 0;
+        comboRepeatIndex = 0;
+        currentRepetitionCompleted = false;
+    }
+
+    private void stopEverything() {
+        stopSessionOnly();
+        fusionRunning = false;
+        if (cameraProvider != null) cameraProvider.unbindAll();
+        previewView = null;
+        hudView = null;
+        strikeTracker = null;
+    }
+
+    @Override public void onBackPressed() {
+        if (currentMode == MODE_HOME) super.onBackPressed();
+        else showHome();
+    }
+
+    @Override protected void onDestroy() {
+        stopEverything();
+        speech.shutdown();
+        poseDetector.close();
+        cameraExecutor.shutdown();
+        strikeDb.close();
+        super.onDestroy();
+    }
+
+    @Override public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
+        if (requestCode == CAMERA_PERMISSION && results.length > 0 && results[0] == PackageManager.PERMISSION_GRANTED) {
+            if (currentMode == MODE_VISION || currentMode == MODE_FUSION) startCamera();
+        } else if (requestCode == CAMERA_PERMISSION) {
+            Toast.makeText(this, "Camera mode requires camera permission", Toast.LENGTH_LONG).show();
+            showHome();
+        }
+    }
+
+    private void addHeader(LinearLayout parent, String heading, String sub) {
+        TextView title = text(heading, 27, Color.WHITE, true);
+        title.setGravity(Gravity.CENTER);
+        parent.addView(title, fullWrap(0));
+        TextView subtitle = text(sub, 14, 0xFF98A7B6, false);
+        subtitle.setGravity(Gravity.CENTER);
+        parent.addView(subtitle, fullWrap(5));
+    }
+
+    private Button modeButton(String title, String sub, Runnable action) {
+        Button b = new Button(this);
+        b.setAllCaps(false);
+        b.setText(title + "\n" + sub);
+        b.setTextColor(Color.WHITE);
+        b.setTextSize(16);
+        b.setGravity(Gravity.CENTER);
+        b.setPadding(dp(12), dp(15), dp(12), dp(15));
+        b.setBackground(round(0xFF101721, 15, 0xFF2F485D));
+        b.setOnClickListener(v -> action.run());
+        return b;
+    }
+
+    private Button actionButton(String label) {
+        Button b = new Button(this);
+        b.setText(label); b.setTextColor(Color.WHITE); b.setTextSize(14); b.setTypeface(Typeface.DEFAULT_BOLD);
+        b.setBackground(round(0xFF0E4660, 12, 0xFF50D9FF));
+        return b;
+    }
+    private Button actionButtonWith(String label, Runnable action) {
+        Button b = actionButton(label); b.setOnClickListener(v -> action.run()); return b;
+    }
+    private Button smallButton(String label) {
+        Button b = actionButton(label);
+        b.setTextSize(11);
+        b.setPadding(dp(8), dp(4), dp(8), dp(4));
+        return b;
+    }
+
+    private Spinner spinner(String[] values) {
+        Spinner s = new Spinner(this);
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, values) {
+            @Override public View getView(int position, View convertView, android.view.ViewGroup parent) {
+                TextView v = (TextView) super.getView(position, convertView, parent);
+                v.setTextColor(Color.WHITE); v.setTextSize(14); v.setPadding(dp(10), dp(9), dp(10), dp(9));
+                return v;
+            }
+            @Override public View getDropDownView(int position, View convertView, android.view.ViewGroup parent) {
+                TextView v = (TextView) super.getDropDownView(position, convertView, parent);
+                v.setTextColor(Color.BLACK); v.setTextSize(14); return v;
+            }
+        };
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        s.setAdapter(adapter);
+        s.setBackground(round(0xFF151D27, 10, 0xFF3A5368));
+        return s;
+    }
+
+    private void addLabeled(LinearLayout parent, String labelText, View control) {
+        parent.addView(text(labelText, 14, 0xFFD7E0EA, true), fullWrap(8));
+        parent.addView(control, fullWrap(1));
+    }
+
+    private CheckBox check(String text, boolean checked) {
+        CheckBox c = new CheckBox(this);
+        c.setText(text); c.setTextColor(Color.WHITE); c.setTextSize(15); c.setChecked(checked);
+        return c;
+    }
+
+    private TextView text(String text, int sp, int color, boolean bold) {
+        TextView v = new TextView(this);
+        v.setText(text); v.setTextSize(sp); v.setTextColor(color);
+        if (bold) v.setTypeface(Typeface.DEFAULT_BOLD);
+        return v;
+    }
+
+    private LinearLayout vertical(int spacing) {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.VERTICAL);
+        l.setShowDividers(LinearLayout.SHOW_DIVIDER_NONE);
+        return l;
+    }
+
+    private LinearLayout horizontal(int spacing) {
+        LinearLayout l = new LinearLayout(this);
+        l.setOrientation(LinearLayout.
